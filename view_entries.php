@@ -412,8 +412,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
             $total_pages = ceil($total_entries / $per_page);
             
             // Add limit and offset to params *after* count
-            $params[] = $per_page;
-            $params[] = $offset;
+            // $params[] = $per_page; // These are handled below now
+            // $params[] = $offset;
 
             $entries_stmt = $db->prepare("
                 SELECT id, email, nickname, total_score 
@@ -423,7 +423,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
                 LIMIT ? OFFSET ?
             ");
             
-            $entries_stmt->execute($params);
+            // --- THIS IS THE FIX ---
+            $param_index = 1;
+            
+            // Bind the search param if it exists
+            if (!empty($search_email)) {
+                // $params[0] holds the search string
+                $entries_stmt->bindValue($param_index++, $params[0], PDO::PARAM_STR);
+            }
+            
+            // Bind LIMIT (which is $per_page)
+            $entries_stmt->bindValue($param_index++, $per_page, PDO::PARAM_INT);
+            
+            // Bind OFFSET (which is $offset)
+            $entries_stmt->bindValue($param_index++, $offset, PDO::PARAM_INT);
+            // --- END FIX ---
+            
+            $entries_stmt->execute();
             $entries_list = $entries_stmt->fetchAll();
 
         ?>

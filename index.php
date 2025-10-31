@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ";
                         $headers = "MIME-Version: 1.0" . "\r\n";
                         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-                        $headers .= 'From: noreply@yourdomain.com' . "\r\n"; // <-- **** REPLACE THIS ****
+                        $headers .= 'From: noreply@solidverbal.com' . "\r\n"; // <-- **** REPLACE THIS ****
 
                         if (mail($email, $subject, $message, $headers)) {
                             $success = "We found your entry! An edit link has been sent to {$email}. Please check your inbox.";

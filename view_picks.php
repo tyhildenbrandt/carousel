@@ -200,15 +200,15 @@ if (!isset($_GET['id'])) {
             <h1><?= htmlspecialchars($selectedEntry['nickname']) ?>'s Picks</h1>
             <p class="subtitle">
                 Total Score: <strong><?= number_format($selectedEntry['total_score']) ?> points</strong>
-                <!-- This is the bonus points display -->
+                <!-- Bonus points display -->
                 <?php if ($selectedEntry['bonus_points'] > 0): ?>
                     <span style="font-size: 14px; color: #28a745; display: block;">(includes +<?= $selectedEntry['bonus_points'] ?> bonus points)</span>
                 <?php endif; ?>
             </p>
 
-            <!-- This is the combined predictions table -->
+            <!-- SECTION 1: CURRENT OPENINGS -->
             <div class="section">
-                <h2>Carousel Predictions</h2>
+                <h2>Current Openings</h2>
                 <table>
                     <thead>
                         <tr>
@@ -219,7 +219,6 @@ if (!isset($_GET['id'])) {
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Existing Openings -->
                         <?php foreach ($predictions['existing'] as $pred): ?>
                             <?php
                                 $actualDisplay = '⏳ TBD';
@@ -244,8 +243,23 @@ if (!isset($_GET['id'])) {
                                 <td class="<?= $pointsClass ?>"><?= $pred['points'] > 0 ? '+' : '' ?><?= $pred['points'] ?></td>
                             </tr>
                         <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
 
-                        <!-- Wildcard Predictions -->
+            <!-- SECTION 2: PREDICTED OPENINGS (WILD CARDS) -->
+            <div class="section">
+                <h2>Predicted Openings (Wild Cards)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>School</th>
+                            <th>Predicted Coach</th>
+                            <th>Actual Hire</th>
+                            <th>Points</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         <?php foreach ($predictions['wildcard'] as $pred): ?>
                              <?php
                                 $actualDisplay = '⏳ TBD';
@@ -275,7 +289,7 @@ if (!isset($_GET['id'])) {
                 </table>
             </div>
 
-            <!-- This is the scoring rules section -->
+            <!-- Scoring rules section -->
             <div class="scoring-rules">
                 <h3>Scoring Rules</h3>
                 <ul>
@@ -308,3 +322,4 @@ if (!isset($_GET['id'])) {
     </div>
 </body>
 </html>
+

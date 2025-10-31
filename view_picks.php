@@ -294,28 +294,3 @@ if (!isset($_GET['id'])) {
     </div>
 </body>
 </html>
-```
-
----
-
-### 2. Update to `step2.php`
-
-In your `step2.php` file, find the `try` block where you save the submission. You need to make **one change**: add the new `$entryId` to the session so `confirmation.php` can use it.
-
-Find this code (around line 50):
-```php
-// Clear session and redirect to confirmation
-$_SESSION['confirmation'] = [
-    'nickname' => $_SESSION['nickname'],
-    'email' => $_SESSION['email']
-];
-```
-
-**Change it to this:**
-```php
-// Clear session and redirect to confirmation
-$_SESSION['confirmation'] = [
-    'nickname' => $_SESSION['nickname'],
-    'email' => $_SESSION['email'],
-    'entry_id' => $entryId  // <-- ADD THIS LINE
-];

@@ -1,6 +1,15 @@
 <?php
 require_once 'config.php';
 
+// --- ADD THIS NEW BLOCK ---
+// Handle logout
+if (isset($_POST['logout'])) {
+    session_destroy();
+    header('Location: admin.php');
+    exit;
+}
+// --- END NEW BLOCK ---
+
 // Simple authentication
 if (!isset($_SESSION['admin_logged_in'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
@@ -403,7 +412,8 @@ function calculateAllScores($db) {
         <div class="header">
             <h1>Admin Panel</h1>
             <form method="POST" style="display: inline;">
-                <button type="submit" name="logout" class="btn logout" onclick="<?php session_destroy(); ?>">Logout</button>
+                <!-- REMOVED the onclick attribute -->
+                <button type="submit" name="logout" class="btn logout">Logout</button>
             </form>
             
             <div class="stats">
@@ -518,3 +528,4 @@ function calculateAllScores($db) {
     </div>
 </body>
 </html>
+

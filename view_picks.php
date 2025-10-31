@@ -2,7 +2,7 @@
 require_once 'config.php';
 
 $selectedEntry = null;
-$wildcards = [];
+$wildcards = []; // We still need to fetch this to check status for coach scoring
 $predictions = [];
 $error = '';
 
@@ -24,7 +24,7 @@ if (!isset($_GET['id'])) {
         if (!$selectedEntry) {
             $error = 'Entry not found. This link may be incorrect.';
         } else {
-            // Get wild card picks
+            // Get wild card picks (still needed for context, but not displayed separately)
             $stmt = $db->prepare("SELECT * FROM wildcard_picks WHERE entry_id = ? ORDER BY school");
             $stmt->execute([$entryId]);
             $wildcards = $stmt->fetchAll();
@@ -165,6 +165,31 @@ if (!isset($_GET['id'])) {
             text-align: center;
             margin-top: 30px;
         }
+        /* New Scoring Rules styles */
+        .scoring-rules {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .scoring-rules h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .scoring-rules ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .scoring-rules li {
+            margin-bottom: 5px;
+        }
+        .scoring-rules li strong {
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -178,49 +203,9 @@ if (!isset($_GET['id'])) {
                 Total Score: <strong><?= number_format($selectedEntry['total_score']) ?> points</strong>
             </p>
 
-            <!-- Wild Card Picks -->
+            <!-- THIS IS THE NEW COMBINED SECTION -->
             <div class="section">
-                <h2>Wild Card Schools</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>School</th>
-                            <th>Status</th>
-                            <th>Points</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($wildcards as $wc): ?>
-                            <?php
-                                $status = 'Pending';
-                                $rowClass = 'status-pending';
-                                if ($wc['opened'] === 1) {
-                                    $status = '✅ Opened';
-                                    $rowClass = 'status-correct';
-                                } elseif ($wc['opened'] === 0) {
-                                    $status = '❌ Did Not Open';
-                                    $rowClass = 'status-incorrect';
-                                }
-                                $pointsClass = $wc['points'] > 0 ? 'points-positive' : ($wc['points'] < 0 ? 'points-negative' : 'points-zero');
-                            ?>
-                            <tr class="<?= $rowClass ?>">
-                                <td>
-                                    <strong>
-                                        <?= displayLogo($wc['school'], 35) ?>
-                                        <span><?= htmlspecialchars($wc['school']) ?></span>
-                                    </strong>
-                                </td>
-                                <td><?= $status ?></td>
-                                <td class="<?= $pointsClass ?>"><?= $wc['points'] > 0 ? '+' : '' ?><?= $wc['points'] ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Coach Predictions -->
-            <div class="section">
-                <h2>Coach Predictions</h2>
+                <h2>Carousel Predictions</h2>
                 <table>
                     <thead>
                         <tr>
@@ -286,6 +271,27 @@ if (!isset($_GET['id'])) {
                     </tbody>
                 </table>
             </div>
+
+            <!-- NEW SCORING RULES SECTION -->
+            <div class="scoring-rules">
+                <h3>Scoring Rules</h3>
+                <ul>
+                    <li><strong>Wild Card School (Step 1):</strong>
+                        <strong>+100</strong> points if your Wild Card school has an opening. |
+                        <strong style="color: #dc3545;">-50</strong> points if it does NOT have an opening.
+                    </li>
+                    <li><strong>Existing Opening (Step 2):</strong>
+                        <strong>+200</strong> for correct coach at correct school. |
+                        <strong>+100</strong> if your coach takes a different P4 job.
+                    </li>
+                    <li><strong>Wild Card Pick (Step 2):</strong>
+                        <strong>+300</strong> for correct coach at correct school (jackpot!). |
+                        <strong>+150</strong> if school opens but coach takes different P4 job. |
+                        <strong>+100</strong> if school doesn't open but coach takes a P4 job.
+                    </li>
+                </ul>
+            </div>
+            
         <?php endif; ?>
         
         <div class="button-group">

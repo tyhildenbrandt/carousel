@@ -1,15 +1,16 @@
 <?php
 require_once 'config.php';
 
-// Check if Step 1 was completed
+// Check if Step 1 (create_entry.php) was completed
 if (!isset($_SESSION['email']) || !isset($_SESSION['wildcards'])) {
+    // Send back to the start if session is incomplete
     header('Location: index.php');
     exit;
 }
 
 $error = '';
 
-// --- NEW: Load old picks if this is an edit ---
+// --- Load old picks if this is an edit ---
 $old_coach_picks = [];
 if (isset($_SESSION['edit_entry_id'])) {
     $db = getDB();
@@ -41,21 +42,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$allFilled) {
         $error = 'Please enter a coach name for all 12 schools.';
     } else {
-        // Calculate Bonus Points
+        // --- Calculate Bonus Points ---
         $bonus_podcast = (int)($_POST['bonus_podcast'] ?? 0);
         $bonus_youtube = (int)($_POST['bonus_youtube'] ?? 0);
         $bonus_newsletter = isset($_POST['bonus_newsletter']) ? 1 : 0;
         
+        // Calculate total bonus
         $total_bonus = 0;
         if ($bonus_podcast === 1) $total_bonus += 20;
         if ($bonus_youtube === 1) $total_bonus += 20;
         if ($bonus_newsletter === 1) $total_bonus += 10;
+        // --- END NEW ---
 
         try {
             $db = getDB();
             $db->beginTransaction();
             
-            // --- MODIFIED: Save bonus_points AND total_score ---
+            // --- MODIFIED: Save bonus_points AND set total_score to bonus_points ---
             $stmt = $db->prepare("INSERT INTO entries (email, nickname, bonus_points, total_score) VALUES (?, ?, ?, ?)");
             $stmt->execute([$_SESSION['email'], $_SESSION['nickname'], $total_bonus, $total_bonus]);
             $entryId = $db->lastInsertId();
@@ -88,6 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'entry_id' => $entryId
             ];
             unset($_SESSION['email'], $_SESSION['nickname'], $_SESSION['wildcards']);
+            // Clean up any remaining auth flags
+            unset($_SESSION['auth_entry_id']);
+            unset($_SESSION['new_user_email']);
             
             header('Location: confirmation.php');
             exit;
@@ -304,8 +310,6 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
         .scoring-box strong {
             color: #28a745;
         }
-
-        /* --- BONUS SECTION CSS --- */
         .bonus-section {
             background: #f8f9fa;
             border: 2px solid #ddd;
@@ -375,7 +379,6 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
         <p class="subtitle">Now predict which coaches will take each job!</p>
         
         <div class="step-indicator">
-            <!-- NEW: Dynamic Step Title -->
             <?php if (!empty($old_coach_picks)): ?>
                 STEP 2 of 2: Review and Edit Your Coach Picks
             <?php else: ?>
@@ -402,7 +405,7 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                 </div>
                 <?php foreach ($EXISTING_OPENINGS as $school): ?>
                     <?php
-                        // NEW: Check for an old pick to pre-fill
+                        // Check for an old pick to pre-fill
                         $old_pick = $old_coach_picks[$school] ?? $_POST['coaches'][$school] ?? '';
                     ?>
                     <div class="coach-input-group">
@@ -434,7 +437,7 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                 </div>
                 <?php foreach ($_SESSION['wildcards'] as $school): ?>
                     <?php
-                        // NEW: Check for an old pick to pre-fill
+                        // Check for an old pick to pre-fill
                         $old_pick = $old_coach_picks[$school] ?? $_POST['coaches'][$school] ?? '';
                     ?>
                     <div class="coach-input-group wildcard">
@@ -503,7 +506,7 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
             </div>
             
             <div class="button-group">
-                <a href="index.php" class="btn btn-secondary">← Back to Step 1</a>
+                <a href="create_entry.php" class="btn btn-secondary">← Back to Step 1</a>
                 <button type="submit" class="btn btn-primary">Submit My Predictions →</button>
             </div>
         </form>
@@ -603,7 +606,7 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
             });
         }
 
-        // --- NEW BONUS SCRIPT ---
+        // --- BONUS SCRIPT ---
         document.addEventListener('DOMContentLoaded', function() {
             const links = document.querySelectorAll('.bonus-link');
             
@@ -626,7 +629,7 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                 });
             });
         });
-        // --- END BONUS SCRIPT ---
     </script>
 </body>
 </html>
+

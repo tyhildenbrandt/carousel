@@ -4,8 +4,17 @@ require_once 'config.php';
 $error = '';
 $success = '';
 
+// --- NEW AUTH CHECK ---
+// A user MUST be either a new user (from index.php) or an auth'd user (from auth.php)
+if (!isset($_SESSION['new_user_email']) && !isset($_SESSION['auth_entry_id'])) {
+    // If not, send them back to the start
+    header('Location: index.php');
+    exit;
+}
+// --- END AUTH CHECK ---
+
+
 // Check if we are loading this page from a magic link
-// We set this in auth.php
 if (isset($_SESSION['load_success'])) {
     $success = $_SESSION['load_success'];
     unset($_SESSION['load_success']);
@@ -16,114 +25,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!GAME_ACTIVE) {
         $error = 'Submissions are currently closed.';
     } else {
-        $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
+        // We trust the email from the session
+        $email = $_SESSION['new_user_email'] ?? $_SESSION['email'] ?? '';
         $nickname = trim($_POST['nickname'] ?? '');
         $wildcards = $_POST['wildcards'] ?? [];
         
-        // Validation
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
+        if (empty($email)) {
+            $error = 'Your session has expired. Please start over from the login page.';
         } elseif (empty($nickname)) {
             $error = 'Please enter a nickname.';
         } elseif (count($wildcards) !== 4) {
             $error = 'Please select exactly 4 Wild Card schools.';
         } else {
-            // --- THIS IS THE NEW MAGIC LINK LOGIC ---
             $db = getDB();
-            $stmt = $db->prepare("SELECT id FROM entries WHERE email = ?");
-            $stmt->execute([$email]);
-            $existing_entry = $stmt->fetch();
             
-            // Check if user is a RETURNING PLAYER
-            if ($existing_entry) {
-                
-                // Check if they are authorized (i.e., they just clicked a magic link)
-                if (isset($_SESSION['auth_entry_id']) && $_SESSION['auth_entry_id'] === $existing_entry['id']) {
-                    // --- SECURE OVERWRITE LOGIC ---
-                    // User is authorized to delete and resubmit.
-                    $db->beginTransaction();
-                    try {
-                        // Delete the old entry (ON DELETE CASCADE handles the rest)
-                        $delete_stmt = $db->prepare("DELETE FROM entries WHERE id = ?");
-                        $delete_stmt->execute([$existing_entry['id']]);
-                        $db->commit();
-                        
-                        // Unset the auth flag
-                        unset($_SESSION['auth_entry_id']);
-                        
-                        // Proceed as a new user (with the data they just submitted)
-                        $_SESSION['email'] = $email;
-                        $_SESSION['nickname'] = $nickname;
-                        $_SESSION['wildcards'] = $wildcards;
-                        // Store the coach picks from their old entry, if they exist
-                        // We'll load them in step2.php
-                        $_SESSION['edit_entry_id'] = $existing_entry['id']; 
-                        
-                        header('Location: step2.php');
-                        exit;
-                    } catch (Exception $e) {
-                        $db->rollBack();
-                        $error = 'An error occurred while overwriting. Please try again.';
-                    }
+            // Check if this is an OVERWRITE (auth'd user)
+            if (isset($_SESSION['auth_entry_id'])) {
+                $db->beginTransaction();
+                try {
+                    $entry_id = $_SESSION['auth_entry_id'];
+                    // Delete the old entry
+                    $delete_stmt = $db->prepare("DELETE FROM entries WHERE id = ?");
+                    $delete_stmt->execute([$entry_id]);
+                    $db->commit();
                     
-                } else {
-                    // --- SEND MAGIC LINK LOGIC ---
-                    // User is not authorized. Send them a link.
-                    // (We ignore the nickname and wildcards they just submitted)
-                    
-                    try {
-                        // 1. Generate secure token and expiry
-                        $token = bin2hex(random_bytes(32));
-                        $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
-                        $entry_id = $existing_entry['id'];
+                    // Unset auth flags
+                    unset($_SESSION['auth_entry_id']);
+                    // Set edit_entry_id to load old coach picks in step 2
+                    $_SESSION['edit_entry_id'] = $entry_id; 
 
-                        // 2. Store token in database
-                        $stmt = $db->prepare("INSERT INTO auth_tokens (entry_id, token, expires_at) VALUES (?, ?, ?)");
-                        $stmt->execute([$entry_id, $token, $expires]);
-
-                        // 3. Build link
-                        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
-                        $host = $_SERVER['HTTP_HOST'];
-                        $path = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-                        $link = "{$protocol}://{$host}{$path}/auth.php?token={$token}";
-
-                        // 4. Send email
-                        $subject = "Edit Your Coaching Carousel Picks";
-                        $message = "
-                            <html>
-                            <body style='font-family: Arial, sans-serif; line-height: 1.6;'>
-                                <h2>Edit Your Picks</h2>
-                                <p>We received a request to edit the picks associated with this email address.</p>
-                                <p>To proceed, please click the link below. This link is valid for 15 minutes.</p>
-                                <p>
-                                    <a href='{$link}' style='background: #667eea; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;'>
-                                        Click Here to Edit Your Picks
-                                    </a>
-                                </p>
-                                <p>If you did not request this, you can safely ignore this email.</p>
-                            </body>
-                            </html>
-                        ";
-                        $headers = "MIME-Version: 1.0" . "\r\n";
-                        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-                        $headers .= 'From: noreply@solidverbal.com' . "\r\n"; // <-- **** REPLACE THIS ****
-
-                        if (mail($email, $subject, $message, $headers)) {
-                            $success = "We found your entry! An edit link has been sent to {$email}. Please check your inbox.";
-                        } else {
-                            $error = "We found your entry, but could not send an email. Please contact support.";
-                        }
-                        
-                    } catch (Exception $e) {
-                        $error = "A database error occurred. " . $e->getMessage();
-                    }
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    $error = 'An error occurred while overwriting. Please try again.';
                 }
-            } else {
-                // --- NEW PLAYER LOGIC ---
-                // Email is new. Proceed as normal.
-                $_SESSION['email'] = $email;
+            }
+            
+            // If no error, proceed to save
+            if (empty($error)) {
+                // Set session for step 2
+                $_SESSION['email'] = $email; // This is now the confirmed email
                 $_SESSION['nickname'] = $nickname;
                 $_SESSION['wildcards'] = $wildcards;
+                
+                // Unset the new user flag
+                if(isset($_SESSION['new_user_email'])) {
+                    unset($_SESSION['new_user_email']);
+                }
+                
                 header('Location: step2.php');
                 exit;
             }
@@ -131,11 +79,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// --- NEW: Check for session data to pre-fill the form ---
-// This happens after a user clicks the magic link from auth.php
-$entry_email = $_SESSION['email'] ?? $_POST['email'] ?? '';
+// --- Pre-fill form data from session ---
+$entry_email = $_SESSION['new_user_email'] ?? $_SESSION['email'] ?? '';
 $entry_nickname = $_SESSION['nickname'] ?? $_POST['nickname'] ?? '';
-$entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.php
+$entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
 
 ?>
 <!DOCTYPE html>
@@ -238,6 +185,12 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
             outline: none;
             border-color: #667eea;
         }
+        /* Make email field read-only */
+        input[type="email"][readonly] {
+            background: #f0f0f0;
+            color: #666;
+            cursor: not-allowed;
+        }
         .wildcard-section {
             margin: 30px 0;
         }
@@ -318,7 +271,6 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
             border-radius: 6px;
             margin-bottom: 20px;
         }
-        /* --- NEW: Success Box for Email Sent --- */
         .success {
             background: #d4edda;
             border: 1px solid #c3e6cb;
@@ -327,7 +279,6 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
             border-radius: 8px;
             margin-bottom: 20px;
         }
-        
         .submit-btn {
             background: #667eea;
             color: white;
@@ -355,11 +306,10 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
         <p class="subtitle">Predict the college football coaching moves!</p>
         
         <div class="step-indicator">
-            <!-- NEW: Dynamic Step Title -->
             <?php if (isset($_SESSION['auth_entry_id'])): ?>
                 STEP 1 of 2: Review and Edit Your Picks
             <?php else: ?>
-                STEP 1 of 2: Select Your Wild Card Schools
+                STEP 1 of 2: Create Your Entry
             <?php endif; ?>
         </div>
         
@@ -386,14 +336,13 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
             <div class="success"><?= htmlspecialchars($success) ?></div>
         <?php endif; ?>
         
-        <!-- === GAME LOCK LOGIC === -->
         <?php if (GAME_ACTIVE): ?>
         
             <form method="POST" id="gameForm">
-                <label for="email">Email Address *</label>
-                <input type="email" id="email" name="email" required 
+                <label for="email">Email Address (Locked)</label>
+                <input type="email" id="email" name="email_display" required 
                        value="<?= htmlspecialchars($entry_email) ?>"
-                       placeholder="your.email@example.com">
+                       readonly>
                 
                 <label for="nickname">Nickname / Display Name *</label>
                 <input type="text" id="nickname" name="nickname" required 
@@ -434,7 +383,6 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
                                            name="wildcards[]" 
                                            value="<?= htmlspecialchars($school) ?>"
                                            id="school_<?= htmlspecialchars(str_replace(' ', '_', $school)) ?>"
-                                           <!-- NEW: Pre-check based on session data -->
                                            <?= in_array($school, $entry_wildcards) ? 'checked' : '' ?>>
                                     <label for="school_<?= htmlspecialchars(str_replace(' ', '_', $school)) ?>">
                                         <?= displayLogo($school, 30) ?>
@@ -452,20 +400,10 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
             </form>
 
         <?php else: ?>
-
-            <!-- This is what users see when the game is locked -->
             <div class="info-box" style="background: #fff3cd; border-color: #ffc107; text-align: center;">
                 <h3 style="font-size: 24px;">Submissions Are Closed</h3>
-                <p style="font-size: 16px; margin-top: 10px; line-height: 1.6;">
-                    The game is now locked. No new entries are allowed. 
-                    Good luck! <br>You can check the <a href="leaderboard.php" style="color: #667eea; font-weight: 600;">Leaderboard</a> 
-                    to see the results as they come in.
-                </p>
             </div>
-
         <?php endif; ?>
-        <!-- === END GAME LOCK LOGIC === -->
-
     </div>
     
     <script>
@@ -475,16 +413,11 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
         const filterBtns = document.querySelectorAll('.filter-btn');
         const schoolOptions = document.querySelectorAll('.school-option');
         
-        // Conference filter
         filterBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const conference = btn.dataset.conference;
-                
-                // Update active button
                 filterBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                
-                // Show/hide schools
                 schoolOptions.forEach(option => {
                     if (conference === 'all' || option.dataset.conference === conference) {
                         option.style.display = 'block';
@@ -507,7 +440,6 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.p
                 countDisplay.style.color = checked > 4 ? '#c33' : '#667eea';
             }
             
-            // Disable unchecked boxes if 4 are selected
             checkboxes.forEach(cb => {
                 if (!cb.checked && checked >= 4) {
                     cb.disabled = true;

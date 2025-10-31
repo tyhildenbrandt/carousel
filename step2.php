@@ -26,13 +26,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$allFilled) {
         $error = 'Please enter a coach name for all 12 schools.';
     } else {
+        // --- NEW: Calculate Bonus Points ---
+        $bonus_podcast = (int)($_POST['bonus_podcast'] ?? 0);
+        $bonus_youtube = (int)($_POST['bonus_youtube'] ?? 0);
+        $bonus_newsletter = isset($_POST['bonus_newsletter']) ? 1 : 0;
+        
+        // Calculate total bonus
+        $total_bonus = 0;
+        if ($bonus_podcast === 1) $total_bonus += 20;
+        if ($bonus_youtube === 1) $total_bonus += 20;
+        if ($bonus_newsletter === 1) $total_bonus += 10;
+        // --- END NEW ---
+
         try {
             $db = getDB();
             $db->beginTransaction();
             
-            // Insert entry
-            $stmt = $db->prepare("INSERT INTO entries (email, nickname) VALUES (?, ?)");
-            $stmt->execute([$_SESSION['email'], $_SESSION['nickname']]);
+            // --- MODIFIED: Add bonus_points to the insert query ---
+            $stmt = $db->prepare("INSERT INTO entries (email, nickname, bonus_points) VALUES (?, ?, ?)");
+            $stmt->execute([$_SESSION['email'], $_SESSION['nickname'], $total_bonus]);
             $entryId = $db->lastInsertId();
             
             // Insert wildcard picks
@@ -60,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['confirmation'] = [
                 'nickname' => $_SESSION['nickname'],
                 'email' => $_SESSION['email'],
-                'entry_id' => $entryId // <-- MODIFICATION IS HERE
+                'entry_id' => $entryId
             ];
             unset($_SESSION['email'], $_SESSION['nickname'], $_SESSION['wildcards']);
             
@@ -279,6 +291,69 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
         .scoring-box strong {
             color: #28a745;
         }
+
+        /* --- BONUS SECTION CSS --- */
+        .bonus-section {
+            background: #f8f9fa;
+            border: 2px solid #ddd;
+            padding: 25px;
+            border-radius: 8px;
+        }
+        .bonus-item {
+            display: grid;
+            grid-template-columns: 1fr 100px;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .bonus-item-desc {
+            line-height: 1.5;
+        }
+        .bonus-item-desc strong {
+            color: #333;
+            font-size: 16px;
+        }
+        .bonus-item-desc p {
+            font-size: 14px;
+            color: #555;
+        }
+        .bonus-links {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .bonus-links a {
+            font-weight: 600;
+            color: #667eea;
+            text-decoration: none;
+        }
+        .bonus-links a:hover {
+            text-decoration: underline;
+        }
+        .bonus-status {
+            font-weight: 600;
+            text-align: right;
+            color: #dc3545; /* Red */
+        }
+        .bonus-status.completed {
+            color: #28a745; /* Green */
+        }
+        .newsletter-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .newsletter-check input {
+            width: 18px;
+            height: 18px;
+        }
+        .newsletter-check label {
+            margin: 0;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -352,6 +427,54 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                     </div>
                 <?php endforeach; ?>
             </div>
+
+            <!-- === BONUS SECTION === -->
+            <div class="section bonus-section">
+                <h2>🎁 Get 50 Bonus Points!</h2>
+                
+                <!-- Podcast Item -->
+                <div class="bonus-item">
+                    <div class="bonus-item-desc">
+                        <strong>Follow the Podcast (+20 pts)</strong>
+                        <p>Click to follow on your favorite app.</p>
+                        <div class="bonus-links">
+                            <a href="https://apple.co/solidverbal" target="_blank" class="bonus-link" data-type="podcast">Apple</a>
+                            <span>|</span>
+                            <a href="https://open.spotify.com/show/0MABqnjJ8GlteE1Ql9xOEs?si=vKos4dmzSNyIrSfrwDgpVw" target="_blank" class="bonus-link" data-type="podcast">Spotify</a>
+                        </div>
+                    </div>
+                    <div class="bonus-status" id="podcast-status">Pending</div>
+                </div>
+
+                <!-- YouTube Item -->
+                <div class="bonus-item">
+                    <div class="bonus-item-desc">
+                        <strong>Subscribe on YouTube (+20 pts)</strong>
+                        <p>Click to subscribe to the channel.</p>
+                        <div class="bonus-links">
+                             <a href="https://www.youtube.com/@solidverbal?sub_confirmation=1" target="_blank" class="bonus-link" data-type="youtube">YouTube</a>
+                        </div>
+                    </div>
+                    <div class="bonus-status" id="youtube-status">Pending</div>
+                </div>
+                
+                <!-- Newsletter Item -->
+                <div class="bonus-item">
+                    <div class="bonus-item-desc">
+                        <strong>Join the Newsletter (+10 pts)</strong>
+                        <p>Check the box to get the best CFB news.</p>
+                    </div>
+                    <div class="newsletter-check">
+                        <input type="checkbox" name="bonus_newsletter" id="bonus_newsletter" value="1">
+                        <label for="bonus_newsletter">Sign Up!</label>
+                    </div>
+                </div>
+
+                <!-- Hidden inputs to track clicks -->
+                <input type="hidden" name="bonus_podcast" id="bonus_podcast" value="0">
+                <input type="hidden" name="bonus_youtube" id="bonus_youtube" value="0">
+            </div>
+            <!-- === END BONUS SECTION === -->
             
             <div class="button-group">
                 <a href="index.php" class="btn btn-secondary">← Back</a>
@@ -400,8 +523,6 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                         matches.forEach((coach, index) => {
                             const div = document.createElement('div');
                             div.className = 'autocomplete-item';
-                            
-                            // Highlight matching text
                             const regex = new RegExp(`(${value})`, 'gi');
                             div.innerHTML = coach.replace(regex, '<strong>$1</strong>');
                             
@@ -409,7 +530,6 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                                 input.value = coach;
                                 suggestions.classList.remove('show');
                             });
-                            
                             suggestions.appendChild(div);
                         });
                         
@@ -422,7 +542,6 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                 // Keyboard navigation
                 input.addEventListener('keydown', function(e) {
                     const items = suggestions.querySelectorAll('.autocomplete-item');
-                    
                     if (e.key === 'ArrowDown') {
                         e.preventDefault();
                         selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
@@ -450,7 +569,6 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                     });
                 }
                 
-                // Close suggestions when clicking outside
                 document.addEventListener('click', function(e) {
                     if (!container.contains(e.target)) {
                         suggestions.classList.remove('show');
@@ -458,6 +576,31 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                 });
             });
         }
+
+        // --- BONUS SCRIPT ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const links = document.querySelectorAll('.bonus-link');
+            
+            links.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    const type = e.target.dataset.type;
+                    
+                    if (type === 'podcast') {
+                        document.getElementById('bonus_podcast').value = '1';
+                        const statusEl = document.getElementById('podcast-status');
+                        statusEl.textContent = '✅ Done!';
+                        statusEl.classList.add('completed');
+                    } 
+                    else if (type === 'youtube') {
+                        document.getElementById('bonus_youtube').value = '1';
+                        const statusEl = document.getElementById('youtube-status');
+                        statusEl.textContent = '✅ Done!';
+                        statusEl.classList.add('completed');
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>
+

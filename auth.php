@@ -20,7 +20,7 @@ if (empty($token)) {
         $auth_token = $stmt->fetch();
         
         if ($auth_token) {
-            // --- SUCCESS ---
+            // --- SUCCESS: Token is valid ---
             $entry_id = $auth_token['entry_id'];
 
             // 1. Delete the token so it can't be used again
@@ -30,26 +30,35 @@ if (empty($token)) {
             $entry_stmt = $db->prepare("SELECT email, nickname FROM entries WHERE id = ?");
             $entry_stmt->execute([$entry_id]);
             $entry = $entry_stmt->fetch();
-            
-            // 3. Load the user's wildcard picks
-            $wc_stmt = $db->prepare("SELECT school FROM wildcard_picks WHERE entry_id = ?");
-            $wc_stmt->execute([$entry_id]);
-            $wildcards = $wc_stmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            // 4. Load all data into the session
-            $_SESSION['auth_entry_id'] = $entry_id; // Authorizes the overwrite
-            $_SESSION['edit_entry_id'] = $entry_id; // Tells step2 to load old coach picks
-            $_SESSION['email'] = $entry['email'];
-            $_SESSION['nickname'] = $entry['nickname'];
-            $_SESSION['wildcards'] = $wildcards;
-            $_SESSION['load_success'] = 'Your picks have been loaded. Make your changes and re-submit!';
-            
-            // 5. Redirect to the main form page
-            header('Location: create_entry.php');
-            exit;
+
+            // --- THIS IS THE FIX ---
+            // Check if the entry *actually* exists before trying to use it
+            if (!$entry) {
+                $error = "Authentication failed. The entry associated with this token could not be found. It may have been deleted.";
+            } else {
+                // --- Entry found, proceed normally ---
+                
+                // 3. Load the user's wildcard picks
+                $wc_stmt = $db->prepare("SELECT school FROM wildcard_picks WHERE entry_id = ?");
+                $wc_stmt->execute([$entry_id]);
+                $wildcards = $wc_stmt->fetchAll(PDO::FETCH_COLUMN);
+                
+                // 4. Load all data into the session
+                $_SESSION['auth_entry_id'] = $entry_id; // Authorizes the overwrite
+                $_SESSION['edit_entry_id'] = $entry_id; // Tells step2 to load old coach picks
+                $_SESSION['email'] = $entry['email'];
+                $_SESSION['nickname'] = $entry['nickname'];
+                $_SESSION['wildcards'] = $wildcards;
+                $_SESSION['load_success'] = 'Your picks have been loaded. Make your changes and re-submit!';
+                
+                // 5. Redirect to the main form page
+                header('Location: create_entry.php');
+                exit;
+            }
+            // --- END FIX ---
 
         } else {
-            // --- FAILURE ---
+            // --- FAILURE: Token is invalid or expired ---
             $error = 'This link is invalid or has expired. Please request a new one.';
             // Clean up any other expired tokens
             $db->query("DELETE FROM auth_tokens WHERE expires_at <= NOW()");

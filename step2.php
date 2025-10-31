@@ -59,7 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Clear session and redirect to confirmation
             $_SESSION['confirmation'] = [
                 'nickname' => $_SESSION['nickname'],
-                'email' => $_SESSION['email']
+                'email' => $_SESSION['email'],
+                'entry_id' => $entryId // <-- MODIFICATION IS HERE
             ];
             unset($_SESSION['email'], $_SESSION['nickname'], $_SESSION['wildcards']);
             

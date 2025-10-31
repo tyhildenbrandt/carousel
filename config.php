@@ -1,8 +1,10 @@
 <?php
-// Start session *immediately*
+// --- THIS MUST BE THE VERY FIRST THING ---
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+// --- END SESSION ---
+
 
 // Database Configuration
 // Fill in your SiteGround database credentials
@@ -62,8 +64,8 @@ function getSchoolLogo($schoolName) {
     //           "Texas A&M" -> "Texas_AM-light.png"
     
     $filename = str_replace(' ', '_', $schoolName); // Spaces to underscores
-    $filename = str_replace('&', '', $filename);     // Remove ampersands
-    $filename = $filename . '-light.png';            // Add suffix
+    $filename = str_replace('&', '', $filename);    // Remove ampersands
+    $filename = $filename . '-light.png';           // Add suffix
     
     $logoPath = LOGO_DIR . $filename;
     
@@ -105,6 +107,114 @@ function getDB() {
         return $pdo;
     } catch(PDOException $e) {
         die("Database connection failed: " . $e->getMessage());
+    }
+}
+
+
+// --- NEW GLOBAL SCORING FUNCTION ---
+/**
+ * Recalculates scores for ALL entries.
+ */
+function calculateAllScores($db) {
+    // MODIFIED: Fetch bonus_points along with id
+    $entries = $db->query("SELECT id, bonus_points FROM entries")->fetchAll(PDO::FETCH_ASSOC);
+    
+    // --- Cache all results in an associative array for fast lookup ---
+    // Key: School Name => Value: Hired Coach Name
+    $allHires = $db->query("SELECT school, hired_coach FROM results WHERE is_filled = 1")
+                   ->fetchAll(PDO::FETCH_KEY_PAIR);
+                   
+    // --- Cache all coach destinations ---
+    // Key: Coach Name => Value: School Name
+    $coachDestinations = $db->query("SELECT hired_coach, school FROM results WHERE is_filled = 1 AND hired_coach IS NOT NULL")
+                          ->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    foreach ($entries as $entry) {
+        // MODIFIED: Start the total score with the user's bonus points
+        $entryId = $entry['id'];
+        $totalScore = (int)$entry['bonus_points'];
+        
+        // === 1. Score Wild Card picks ===
+        $wildcards = $db->prepare("SELECT school, opened FROM wildcard_picks WHERE entry_id = ?");
+        $wildcards->execute([$entryId]);
+        
+        $userWildcardPicks = $wildcards->fetchAll();
+
+        foreach ($userWildcardPicks as $wc) {
+            $points = 0;
+            
+            if ($wc['opened'] === null) {
+                $points = 0; // Pending
+            } elseif ($wc['opened'] == 1) {
+                $points = 100; // Correct
+            } else { // opened == 0
+                $points = -50; // Incorrect
+            }
+            
+            // Update wildcard points in DB
+            $db->prepare("UPDATE wildcard_picks SET points = ? WHERE entry_id = ? AND school = ?")
+               ->execute([$points, $entryId, $wc['school']]);
+            
+            $totalScore += $points;
+        }
+        
+        // === 2. Score Coach predictions ===
+        $predictions = $db->prepare("SELECT id, school, coach_name, is_wildcard FROM coach_predictions WHERE entry_id = ?");
+        $predictions->execute([$entryId]);
+        
+        foreach ($predictions->fetchAll() as $pred) {
+            $points = 0;
+            $predictedSchool = $pred['school'];
+            $predictedCoach = $pred['coach_name'];
+            
+            // SCENARIO 1: Exact Match (Correct school, correct coach)
+            if (isset($allHires[$predictedSchool]) && strtolower(trim($allHires[$predictedSchool])) === strtolower(trim($predictedCoach))) {
+                if ($pred['is_wildcard']) {
+                    $points = 300; // Jackpot
+                } else {
+                    $points = 200; // Existing opening correct
+                }
+            } 
+            // SCENARIO 2: No exact match. Check for Partial Credit.
+            // (Did the predicted coach take *any other* P4 job?)
+            elseif (isset($coachDestinations[$predictedCoach])) {
+                // Yes, the coach *did* move, just to the wrong school.
+                
+                // Was this an existing opening prediction?
+                if (!$pred['is_wildcard']) {
+                    $points = 100; // Half credit for existing opening
+                } 
+                // This was a wildcard prediction.
+                else {
+                    // We need to know if the user's wildcard school opened.
+                    // Find the matching wildcard pick from our earlier fetch.
+                    $openedStatus = null;
+                    foreach ($userWildcardPicks as $wcPick) {
+                        if ($wcPick['school'] === $predictedSchool) {
+                            $openedStatus = $wcPick['opened'];
+                            break;
+                        }
+                    }
+
+                    if ($openedStatus == 1) {
+                        $points = 150; // Wildcard opened, but wrong coach
+                    } else {
+                        $points = 100; // Wildcard didn't open, but coach moved
+                    }
+                }
+            }
+            // SCENARIO 3: No match, no partial credit. Points remain 0.
+            
+            // Update the points for this specific prediction
+            $db->prepare("UPDATE coach_predictions SET points = ? WHERE id = ?")
+               ->execute([$points, $pred['id']]);
+               
+            $totalScore += $points;
+        }
+        
+        // === 3. Update entry total score ===
+        $db->prepare("UPDATE entries SET total_score = ? WHERE id = ?")
+           ->execute([$totalScore, $entryId]);
     }
 }
 ?>

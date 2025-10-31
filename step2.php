@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$allFilled) {
         $error = 'Please enter a coach name for all 12 schools.';
     } else {
-        // --- NEW: Calculate Bonus Points ---
+        // --- Calculate Bonus Points ---
         $bonus_podcast = (int)($_POST['bonus_podcast'] ?? 0);
         $bonus_youtube = (int)($_POST['bonus_youtube'] ?? 0);
         $bonus_newsletter = isset($_POST['bonus_newsletter']) ? 1 : 0;
@@ -42,9 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db = getDB();
             $db->beginTransaction();
             
-            // --- MODIFIED: Add bonus_points to the insert query ---
-            $stmt = $db->prepare("INSERT INTO entries (email, nickname, bonus_points) VALUES (?, ?, ?)");
-            $stmt->execute([$_SESSION['email'], $_SESSION['nickname'], $total_bonus]);
+            // --- MODIFIED: Save bonus_points to BOTH columns ---
+            $stmt = $db->prepare("INSERT INTO entries (email, nickname, bonus_points, total_score) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['email'], $_SESSION['nickname'], $total_bonus, $total_bonus]);
             $entryId = $db->lastInsertId();
             
             // Insert wildcard picks

@@ -153,8 +153,8 @@ $stats = [
  * This is the new, corrected function.
  */
 function calculateAllScores($db) {
-    // Get all entries
-    $entries = $db->query("SELECT id FROM entries")->fetchAll(PDO::FETCH_COLUMN);
+    // MODIFIED: Fetch bonus_points along with id
+    $entries = $db->query("SELECT id, bonus_points FROM entries")->fetchAll(PDO::FETCH_ASSOC);
     
     // --- Cache all results in an associative array for fast lookup ---
     // Key: School Name => Value: Hired Coach Name
@@ -166,8 +166,10 @@ function calculateAllScores($db) {
     $coachDestinations = $db->query("SELECT hired_coach, school FROM results WHERE is_filled = 1 AND hired_coach IS NOT NULL")
                           ->fetchAll(PDO::FETCH_KEY_PAIR);
 
-    foreach ($entries as $entryId) {
-        $totalScore = 0;
+    foreach ($entries as $entry) {
+        // MODIFIED: Start the total score with the user's bonus points
+        $entryId = $entry['id'];
+        $totalScore = (int)$entry['bonus_points'];
         
         // === 1. Score Wild Card picks ===
         $wildcards = $db->prepare("SELECT school, opened FROM wildcard_picks WHERE entry_id = ?");

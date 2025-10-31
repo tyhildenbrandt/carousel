@@ -1,4 +1,9 @@
 <?php
+// Start session *immediately*
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 // Database Configuration
 // Fill in your SiteGround database credentials
 
@@ -54,7 +59,7 @@ define('LOGO_DIR', 'logos/'); // Directory where logo PNG files are stored
 function getSchoolLogo($schoolName) {
     // Convert school name to filename format
     // Examples: "Penn State" -> "Penn_State-light.png"
-    //          "Texas A&M" -> "Texas_AM-light.png"
+    //           "Texas A&M" -> "Texas_AM-light.png"
     
     $filename = str_replace(' ', '_', $schoolName); // Spaces to underscores
     $filename = str_replace('&', '', $filename);     // Remove ampersands
@@ -101,10 +106,5 @@ function getDB() {
     } catch(PDOException $e) {
         die("Database connection failed: " . $e->getMessage());
     }
-}
-
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
 }
 ?>

@@ -5,32 +5,37 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
-    $nickname = trim($_POST['nickname'] ?? '');
-    $wildcards = $_POST['wildcards'] ?? [];
-    
-    // Validation
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please enter a valid email address.';
-    } elseif (empty($nickname)) {
-        $error = 'Please enter a nickname.';
-    } elseif (count($wildcards) !== 4) {
-        $error = 'Please select exactly 4 Wild Card schools.';
+    // Only process POST if the game is active
+    if (!GAME_ACTIVE) {
+        $error = 'Submissions are currently closed.';
     } else {
-        // Check if email already exists
-        $db = getDB();
-        $stmt = $db->prepare("SELECT id FROM entries WHERE email = ?");
-        $stmt->execute([$email]);
+        $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
+        $nickname = trim($_POST['nickname'] ?? '');
+        $wildcards = $_POST['wildcards'] ?? [];
         
-        if ($stmt->fetch()) {
-            $error = 'This email address has already been used. One entry per email allowed.';
+        // Validation
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Please enter a valid email address.';
+        } elseif (empty($nickname)) {
+            $error = 'Please enter a nickname.';
+        } elseif (count($wildcards) !== 4) {
+            $error = 'Please select exactly 4 Wild Card schools.';
         } else {
-            // Store in session and move to step 2
-            $_SESSION['email'] = $email;
-            $_SESSION['nickname'] = $nickname;
-            $_SESSION['wildcards'] = $wildcards;
-            header('Location: step2.php');
-            exit;
+            // Check if email already exists
+            $db = getDB();
+            $stmt = $db->prepare("SELECT id FROM entries WHERE email = ?");
+            $stmt->execute([$email]);
+            
+            if ($stmt->fetch()) {
+                $error = 'This email address has already been used. One entry per email allowed.';
+            } else {
+                // Store in session and move to step 2
+                $_SESSION['email'] = $email;
+                $_SESSION['nickname'] = $nickname;
+                $_SESSION['wildcards'] = $wildcards;
+                header('Location: step2.php');
+                exit;
+            }
         }
     }
 }
@@ -262,67 +267,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="error"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
         
-        <form method="POST" id="gameForm">
-            <label for="email">Email Address *</label>
-            <input type="email" id="email" name="email" required 
-                   value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
-                   placeholder="your.email@example.com">
-            
-            <label for="nickname">Nickname / Display Name *</label>
-            <input type="text" id="nickname" name="nickname" required 
-                   value="<?= htmlspecialchars($_POST['nickname'] ?? '') ?>"
-                   placeholder="Coach Smith" maxlength="100">
-            
-            <div class="wildcard-section">
-                <label>Select 4 Wild Card Schools (Jobs You Think Will Open) *</label>
+
+        <?php if (GAME_ACTIVE): ?>
+        
+            <form method="POST" id="gameForm">
+                <label for="email">Email Address *</label>
+                <input type="email" id="email" name="email" required 
+                       value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                       placeholder="your.email@example.com">
                 
-                <div class="filter-buttons">
-                    <button type="button" class="filter-btn active" data-conference="all">All Schools</button>
-                    <button type="button" class="filter-btn" data-conference="acc">ACC</button>
-                    <button type="button" class="filter-btn" data-conference="sec">SEC</button>
-                    <button type="button" class="filter-btn" data-conference="bigten">Big Ten</button>
-                    <button type="button" class="filter-btn" data-conference="big12">Big 12</button>
-                    <button type="button" class="filter-btn" data-conference="independent">Independent</button>
-                </div>
+                <label for="nickname">Nickname / Display Name *</label>
+                <input type="text" id="nickname" name="nickname" required 
+                       value="<?= htmlspecialchars($_POST['nickname'] ?? '') ?>"
+                       placeholder="Coach Smith" maxlength="100">
                 
-                <div class="selection-count">
-                    <span id="count">0</span> / 4 selected
-                </div>
-                
-                <div class="school-grid">
-                    <?php 
-                    $conferences = [
-                        'acc' => ['Boston College', 'California', 'Clemson', 'Duke', 'Florida State', 'Georgia Tech', 'Louisville', 'Miami', 'NC State', 'North Carolina', 'Pittsburgh', 'SMU', 'Syracuse', 'Virginia', 'Wake Forest'],
-                        'sec' => ['Alabama', 'Auburn', 'Georgia', 'Kentucky', 'Mississippi State', 'Missouri', 'Oklahoma', 'Ole Miss', 'South Carolina', 'Tennessee', 'Texas', 'Texas A&M', 'Vanderbilt'],
-                        'bigten' => ['Illinois', 'Indiana', 'Iowa', 'Maryland', 'Michigan', 'Michigan State', 'Minnesota', 'Nebraska', 'Northwestern', 'Ohio State', 'Oregon', 'Purdue', 'Rutgers', 'USC', 'Washington', 'Wisconsin'],
-                        'big12' => ['Arizona', 'Arizona State', 'Baylor', 'BYU', 'Cincinnati', 'Colorado', 'Houston', 'Iowa State', 'Kansas', 'Kansas State', 'TCU', 'Texas Tech', 'UCF', 'Utah', 'West Virginia'],
-                        'independent' => ['Notre Dame']
-                    ];
+                <div class="wildcard-section">
+                    <label>Select 4 Wild Card Schools (Jobs You Think Will Open) *</label>
                     
-                    foreach ($conferences as $conf => $schools):
-                        foreach ($schools as $school):
-                    ?>
-                        <div class="school-option" data-conference="<?= $conf ?>">
-                            <input type="checkbox" 
-                                   name="wildcards[]" 
-                                   value="<?= htmlspecialchars($school) ?>"
-                                   id="school_<?= htmlspecialchars(str_replace(' ', '_', $school)) ?>"
-                                   <?= in_array($school, $_POST['wildcards'] ?? []) ? 'checked' : '' ?>>
-                            <label for="school_<?= htmlspecialchars(str_replace(' ', '_', $school)) ?>">
-                                <?= displayLogo($school, 30) ?>
-                                <span><?= htmlspecialchars($school) ?></span>
-                            </label>
-                        </div>
-                    <?php 
-                        endforeach;
-                    endforeach; 
-                    ?>
+                    <div class="filter-buttons">
+                        <button type="button" class="filter-btn active" data-conference="all">All Schools</button>
+                        <button type="button" class="filter-btn" data-conference="acc">ACC</button>
+                        <button type="button" class="filter-btn" data-conference="sec">SEC</button>
+                        <button type="button" class="filter-btn" data-conference="bigten">Big Ten</button>
+                        <button type="button" class="filter-btn" data-conference="big12">Big 12</button>
+                        <button type="button" class="filter-btn" data-conference="independent">Independent</button>
+                    </div>
+                    
+                    <div class="selection-count">
+                        <span id="count">0</span> / 4 selected
+                    </div>
+                    
+                    <div class="school-grid">
+                        <?php 
+                        $conferences = [
+                            'acc' => ['Boston College', 'California', 'Clemson', 'Duke', 'Florida State', 'Georgia Tech', 'Louisville', 'Miami', 'NC State', 'North Carolina', 'Pittsburgh', 'SMU', 'Syracuse', 'Virginia', 'Wake Forest'],
+                            'sec' => ['Alabama', 'Auburn', 'Georgia', 'Kentucky', 'Mississippi State', 'Missouri', 'Oklahoma', 'Ole Miss', 'South Carolina', 'Tennessee', 'Texas', 'Texas A&M', 'Vanderbilt'],
+                            'bigten' => ['Illinois', 'Indiana', 'Iowa', 'Maryland', 'Michigan', 'Michigan State', 'Minnesota', 'Nebraska', 'Northwestern', 'Ohio State', 'Oregon', 'Purdue', 'Rutgers', 'USC', 'Washington', 'Wisconsin'],
+                            'big12' => ['Arizona', 'Arizona State', 'Baylor', 'BYU', 'Cincinnati', 'Colorado', 'Houston', 'Iowa State', 'Kansas', 'Kansas State', 'TCU', 'Texas Tech', 'UCF', 'Utah', 'West Virginia'],
+                            'independent' => ['Notre Dame']
+                        ];
+                        
+                        foreach ($conferences as $conf => $schools):
+                            foreach ($schools as $school):
+                        ?>
+                                <div class="school-option" data-conference="<?= $conf ?>">
+                                    <input type="checkbox" 
+                                           name="wildcards[]" 
+                                           value="<?= htmlspecialchars($school) ?>"
+                                           id="school_<?= htmlspecialchars(str_replace(' ', '_', $school)) ?>"
+                                           <?= in_array($school, $_POST['wildcards'] ?? []) ? 'checked' : '' ?>>
+                                    <label for="school_<?= htmlspecialchars(str_replace(' ', '_', $school)) ?>">
+                                        <?= displayLogo($school, 30) ?>
+                                        <span><?= htmlspecialchars($school) ?></span>
+                                    </label>
+                                </div>
+                        <?php 
+                            endforeach;
+                        endforeach; 
+                        ?>
+                    </div>
                 </div>
+                
+                <button type="submit" class="submit-btn" id="submitBtn">Continue to Step 2 →</button>
+            </form>
+
+        <?php else: ?>
+
+            <div class="info-box" style="background: #fff3cd; border-color: #ffc107; text-align: center;">
+                <h3 style="font-size: 24px;">Submissions Are Closed</h3>
+                <p style="font-size: 16px; margin-top: 10px; line-height: 1.6;">
+                    The game is now locked. No new entries are allowed. 
+                    Good luck! <br>You can check the <a href="leaderboard.php" style="color: #667eea; font-weight: 600;">Leaderboard</a> 
+                    to see the results as they come in.
+                </p>
             </div>
-            
-            <button type="submit" class="submit-btn" id="submitBtn">Continue to Step 2 →</button>
-        </form>
-    </div>
+
+        <?php endif; ?>
+        </div>
     
     <script>
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
@@ -356,10 +377,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             countDisplay.textContent = checked;
             
             if (checked === 4) {
-                submitBtn.disabled = false;
+                if (submitBtn) submitBtn.disabled = false;
                 countDisplay.style.color = '#28a745';
             } else {
-                submitBtn.disabled = true;
+                if (submitBtn) submitBtn.disabled = true;
                 countDisplay.style.color = checked > 4 ? '#c33' : '#667eea';
             }
             

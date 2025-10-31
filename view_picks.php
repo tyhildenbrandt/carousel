@@ -16,7 +16,7 @@ if (!isset($_GET['id'])) {
     } else {
         $db = getDB();
         
-        // Get entry details
+        // Get entry details (now includes bonus_points)
         $stmt = $db->prepare("SELECT * FROM entries WHERE id = ?");
         $stmt->execute([$entryId]);
         $selectedEntry = $stmt->fetch();
@@ -165,7 +165,6 @@ if (!isset($_GET['id'])) {
             text-align: center;
             margin-top: 30px;
         }
-        /* New Scoring Rules styles */
         .scoring-rules {
             margin-top: 40px;
             padding-top: 20px;
@@ -201,9 +200,13 @@ if (!isset($_GET['id'])) {
             <h1><?= htmlspecialchars($selectedEntry['nickname']) ?>'s Picks</h1>
             <p class="subtitle">
                 Total Score: <strong><?= number_format($selectedEntry['total_score']) ?> points</strong>
+                <!-- This is the bonus points display -->
+                <?php if ($selectedEntry['bonus_points'] > 0): ?>
+                    <span style="font-size: 14px; color: #28a745; display: block;">(includes +<?= $selectedEntry['bonus_points'] ?> bonus points)</span>
+                <?php endif; ?>
             </p>
 
-            <!-- THIS IS THE NEW COMBINED SECTION -->
+            <!-- This is the combined predictions table -->
             <div class="section">
                 <h2>Carousel Predictions</h2>
                 <table>
@@ -272,7 +275,7 @@ if (!isset($_GET['id'])) {
                 </table>
             </div>
 
-            <!-- NEW SCORING RULES SECTION -->
+            <!-- This is the scoring rules section -->
             <div class="scoring-rules">
                 <h3>Scoring Rules</h3>
                 <ul>
@@ -288,6 +291,11 @@ if (!isset($_GET['id'])) {
                         <strong>+300</strong> for correct coach at correct school (jackpot!). |
                         <strong>+150</strong> if school opens but coach takes different P4 job. |
                         <strong>+100</strong> if school doesn't open but coach takes a P4 job.
+                    </li>
+                    <li><strong>Bonus Points:</strong>
+                        <strong>+20</strong> for Podcast follow. |
+                        <strong>+20</strong> for YouTube sub. |
+                        <strong>+10</strong> for Newsletter signup.
                     </li>
                 </ul>
             </div>

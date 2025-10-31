@@ -7,6 +7,16 @@ if (!isset($_SESSION['confirmation'])) {
 }
 
 $nickname = $_SESSION['confirmation']['nickname'];
+$entryId = $_SESSION['confirmation']['entry_id'];
+
+// Build the full shareable URL
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+$host = $_SERVER['HTTP_HOST'];
+// rtrim ensures we don't get double slashes if the user is in the root directory
+$path = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+$shareUrl = "{$protocol}://{$host}{$path}/view_picks.php?id={$entryId}";
+
+
 unset($_SESSION['confirmation']);
 ?>
 <!DOCTYPE html>
@@ -49,6 +59,46 @@ unset($_SESSION['confirmation']);
             line-height: 1.6;
             margin-bottom: 30px;
         }
+        
+        /* New Share Box */
+        .share-box {
+            background: #f8f9fa;
+            border: 2px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        .share-box h3 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .share-url {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            margin-bottom: 10px;
+        }
+        .copy-btn {
+            width: 100%;
+            padding: 10px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .copy-btn:hover {
+            background: #218838;
+        }
+        /* End New Share Box */
+
         .info-box {
             background: #e8f4f8;
             padding: 20px;
@@ -91,17 +141,48 @@ unset($_SESSION['confirmation']);
             Thanks, <strong><?= htmlspecialchars($nickname) ?></strong>! Your predictions have been recorded.
         </p>
         
+        <!-- New Share Box -->
+        <div class="share-box">
+            <h3>Share Your Picks!</h3>
+            <p style="font-size: 14px; color: #555; margin-bottom: 10px;">
+                Copy this link to share your predictions with friends:
+            </p>
+            <input type="text" id="shareUrl" class="share-url" value="<?= htmlspecialchars($shareUrl) ?>" readonly>
+            <button id="copyBtn" class="copy-btn">Copy Link</button>
+        </div>
+
         <div class="info-box">
             <h3>What Happens Next?</h3>
             <ul>
                 <li>Your predictions are locked in and cannot be changed</li>
                 <li>As coaching moves happen, scores will be calculated automatically</li>
-                <li>Check the leaderboard to see how you stack up against other players</li>
-                <li>Points are awarded based on correct predictions</li>
+                <li>Check the leaderboard to see how you stack up</li>
             </ul>
         </div>
         
         <a href="leaderboard.php" class="btn">View Leaderboard →</a>
     </div>
+
+    <script>
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            const urlInput = document.getElementById('shareUrl');
+            urlInput.select();
+            urlInput.setSelectionRange(0, 99999); // For mobile
+            
+            // Use execCommand as a fallback for iFrame compatibility
+            try {
+                document.execCommand('copy');
+                this.textContent = 'Copied!';
+                this.style.background = '#218838';
+            } catch (err) {
+                this.textContent = 'Copy Failed';
+            }
+            
+            setTimeout(() => {
+                this.textContent = 'Copy Link';
+                this.style.background = '#28a745';
+            }, 2000);
+        });
+    </script>
 </body>
 </html>

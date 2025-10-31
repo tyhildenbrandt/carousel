@@ -56,7 +56,9 @@ if (!isset($_SESSION['admin_logged_in'])) {
 $db = getDB();
 $message = '';
 
-// Handle result updates
+// --- ALL FORM HANDLING ---
+
+// Handle result updates for main openings
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_result'])) {
     $school = $_POST['school'];
     $hiredCoach = trim($_POST['hired_coach']);
@@ -66,20 +68,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_result'])) {
         $stmt->execute([$hiredCoach, $school]);
         $message = "Updated: $school hired $hiredCoach";
         
-        // Recalculate all scores
         calculateAllScores($db);
     }
 }
 
-// Handle marking a wild card school as opened
+// Handle marking a wild card school as OPENED
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_wildcard_opened'])) {
     $school = $_POST['wildcard_school'];
     
-    // Add to results table
+    // Add to results table as an open position
     $stmt = $db->prepare("INSERT INTO results (school, is_filled) VALUES (?, 0) ON DUPLICATE KEY UPDATE school = school");
     $stmt->execute([$school]);
     
-    // Update wildcard_picks table
+    // Update wildcard_picks table to mark as correct (+100)
     $stmt = $db->prepare("UPDATE wildcard_picks SET opened = 1, points = 100 WHERE school = ?");
     $stmt->execute([$school]);
     
@@ -87,14 +88,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_wildcard_opened'
     calculateAllScores($db);
 }
 
-// Get all results
+// Handle adding a new "other" P4 hire for partial credit
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_other_hire'])) {
+    $school = trim($_POST['other_school']);
+    $hiredCoach = trim($_POST['other_coach']);
+    
+    if (!empty($school) && !empty($hiredCoach)) {
+        // Insert this hire into the results table so it can be found
+        $stmt = $db->prepare("
+            INSERT INTO results (school, hired_coach, is_filled, filled_date) 
+            VALUES (?, ?, 1, NOW())
+            ON DUPLICATE KEY UPDATE hired_coach = VALUES(hired_coach), is_filled = 1
+        ");
+        $stmt->execute([$school, $hiredCoach]);
+        
+        $message = "Added 'Other' Hire: $school hired $hiredCoach. Scores will update.";
+        calculateAllScores($db);
+    }
+}
+
+// Handle FINALIZING wild cards (marking them as incorrect)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalize_wildcards'])) {
+    // Find all wildcard picks that are still NULL (pending)
+    // Set them to opened = 0 (false) and points = -50
+    $stmt = $db->prepare("
+        UPDATE wildcard_picks 
+        SET opened = 0, points = -50 
+        WHERE opened IS NULL
+    ");
+    $stmt->execute();
+    
+    $count = $stmt->rowCount();
+    $message = "Finalized $count pending wildcard picks (-50 points each).";
+    
+    // Recalculate all scores
+    calculateAllScores($db);
+}
+
+
+// --- DATA FETCHING FOR PAGE ---
+
+// Get all results (the "answer key")
 $results = $db->query("SELECT * FROM results ORDER BY school")->fetchAll();
 
-// Get all wild card picks that haven't been marked
+// Get all *unique* wild card picks that haven't been marked as opened
 $wildcardSchools = $db->query("
     SELECT DISTINCT school 
     FROM wildcard_picks 
-    WHERE opened IS NULL
+    WHERE school NOT IN (SELECT school FROM results)
     ORDER BY school
 ")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -105,89 +146,108 @@ $stats = [
     'total_positions' => $db->query("SELECT COUNT(*) FROM results")->fetchColumn()
 ];
 
+// --- CORE SCORING LOGIC ---
+
+/**
+ * Recalculates scores for ALL entries.
+ * This is the new, corrected function.
+ */
 function calculateAllScores($db) {
-    global $EXISTING_OPENINGS;
-    
     // Get all entries
     $entries = $db->query("SELECT id FROM entries")->fetchAll(PDO::FETCH_COLUMN);
     
+    // --- Cache all results in an associative array for fast lookup ---
+    // Key: School Name => Value: Hired Coach Name
+    $allHires = $db->query("SELECT school, hired_coach FROM results WHERE is_filled = 1")
+                   ->fetchAll(PDO::FETCH_KEY_PAIR);
+                   
+    // --- Cache all coach destinations ---
+    // Key: Coach Name => Value: School Name
+    $coachDestinations = $db->query("SELECT hired_coach, school FROM results WHERE is_filled = 1 AND hired_coach IS NOT NULL")
+                          ->fetchAll(PDO::FETCH_KEY_PAIR);
+
     foreach ($entries as $entryId) {
         $totalScore = 0;
         
-        // Score Wild Card picks (Step 1)
+        // === 1. Score Wild Card picks ===
         $wildcards = $db->prepare("SELECT school, opened FROM wildcard_picks WHERE entry_id = ?");
         $wildcards->execute([$entryId]);
         
-        foreach ($wildcards->fetchAll() as $wc) {
+        $userWildcardPicks = $wildcards->fetchAll();
+
+        foreach ($userWildcardPicks as $wc) {
+            $points = 0;
+            
             if ($wc['opened'] === null) {
-                // Not yet determined
-                $points = 0;
+                $points = 0; // Pending
             } elseif ($wc['opened'] == 1) {
-                $points = 100; // Correct wild card pick
-            } else {
-                $points = -50; // Incorrect wild card pick
+                $points = 100; // Correct
+            } else { // opened == 0
+                $points = -50; // Incorrect
             }
             
+            // Update wildcard points in DB (this is safe, we just fetched it)
             $db->prepare("UPDATE wildcard_picks SET points = ? WHERE entry_id = ? AND school = ?")
                ->execute([$points, $entryId, $wc['school']]);
             
             $totalScore += $points;
         }
         
-        // Score Coach predictions (Step 2)
-        $predictions = $db->prepare("
-            SELECT cp.*, r.hired_coach as actual_coach
-            FROM coach_predictions cp
-            LEFT JOIN results r ON cp.school = r.school
-            WHERE cp.entry_id = ?
-        ");
+        // === 2. Score Coach predictions ===
+        $predictions = $db->prepare("SELECT id, school, coach_name, is_wildcard FROM coach_predictions WHERE entry_id = ?");
         $predictions->execute([$entryId]);
         
         foreach ($predictions->fetchAll() as $pred) {
             $points = 0;
+            $predictedSchool = $pred['school'];
+            $predictedCoach = $pred['coach_name'];
             
-            if (!empty($pred['actual_coach'])) {
-                // Check for exact match
-                if (strtolower(trim($pred['coach_name'])) === strtolower(trim($pred['actual_coach']))) {
-                    if ($pred['is_wildcard']) {
-                        $points = 300; // Wild card correct coach + school
-                    } else {
-                        $points = 200; // Existing opening correct
-                    }
+            // SCENARIO 1: Exact Match (Correct school, correct coach)
+            if (isset($allHires[$predictedSchool]) && strtolower(trim($allHires[$predictedSchool])) === strtolower(trim($predictedCoach))) {
+                if ($pred['is_wildcard']) {
+                    $points = 300; // Jackpot
                 } else {
-                    // Check if coach went to a different P4 school
-                    $coachTookDifferentJob = $db->prepare("
-                        SELECT COUNT(*) FROM results 
-                        WHERE hired_coach = ? AND school != ?
-                    ");
-                    $coachTookDifferentJob->execute([$pred['coach_name'], $pred['school']]);
-                    
-                    if ($coachTookDifferentJob->fetchColumn() > 0) {
-                        if ($pred['is_wildcard']) {
-                            // Check if the wild card school opened
-                            $wcOpened = $db->prepare("SELECT opened FROM wildcard_picks WHERE entry_id = ? AND school = ?");
-                            $wcOpened->execute([$entryId, $pred['school']]);
-                            $opened = $wcOpened->fetchColumn();
-                            
-                            if ($opened == 1) {
-                                $points = 150; // Wild card opened but wrong coach
-                            } else {
-                                $points = 100; // Wild card didn't open but coach moved
-                            }
-                        } else {
-                            $points = 100; // Half credit for existing opening
+                    $points = 200; // Existing opening correct
+                }
+            } 
+            // SCENARIO 2: No exact match. Check for Partial Credit.
+            // (Did the predicted coach take *any other* P4 job?)
+            elseif (isset($coachDestinations[$predictedCoach])) {
+                // Yes, the coach *did* move, just to the wrong school.
+                
+                // Was this an existing opening prediction?
+                if (!$pred['is_wildcard']) {
+                    $points = 100; // Half credit for existing opening
+                } 
+                // This was a wildcard prediction.
+                else {
+                    // We need to know if the user's wildcard school opened.
+                    // Find the matching wildcard pick from our earlier fetch.
+                    $openedStatus = null;
+                    foreach ($userWildcardPicks as $wcPick) {
+                        if ($wcPick['school'] === $predictedSchool) {
+                            $openedStatus = $wcPick['opened'];
+                            break;
                         }
+                    }
+
+                    if ($openedStatus == 1) {
+                        $points = 150; // Wildcard opened, but wrong coach
+                    } else {
+                        $points = 100; // Wildcard didn't open, but coach moved
                     }
                 }
             }
+            // SCENARIO 3: No match, no partial credit. Points remain 0.
             
+            // Update the points for this specific prediction
             $db->prepare("UPDATE coach_predictions SET points = ? WHERE id = ?")
                ->execute([$points, $pred['id']]);
-            
+               
             $totalScore += $points;
         }
         
-        // Update entry total score
+        // === 3. Update entry total score ===
         $db->prepare("UPDATE entries SET total_score = ? WHERE id = ?")
            ->execute([$totalScore, $entryId]);
     }
@@ -298,9 +358,16 @@ function calculateAllScores($db) {
             border-radius: 4px;
             cursor: pointer;
             font-weight: 600;
+            text-decoration: none;
         }
         .btn:hover {
             background: #5568d3;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
         }
         .btn-small {
             padding: 6px 15px;
@@ -318,6 +385,14 @@ function calculateAllScores($db) {
             border: 1px solid #ddd;
             border-radius: 4px;
             margin-right: 10px;
+        }
+        .form-group {
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+        }
+        .form-group input[type="text"] {
+            flex: 1;
         }
     </style>
 </head>
@@ -346,8 +421,39 @@ function calculateAllScores($db) {
         <?php endif; ?>
         
         <div class="section">
+            <h2>Finalize Wild Card Results</h2>
+            <p style="margin-bottom: 15px; color: #333;">
+                At the end of the carousel, click this to mark all 
+                <strong>pending</strong> wild cards as incorrect (did not open) 
+                and apply the -50 point penalty.
+            </p>
+            <form method="POST">
+                <button type="submit" name="finalize_wildcards" class="btn btn-danger" 
+                        onclick="return confirm('Are you sure? This will apply -50 points to all pending wildcards.')">
+                    Finalize All Pending Wildcards
+                </button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Add 'Other' P4 Hire (for Partial Credit)</h2>
+            <p style="margin-bottom: 15px; color: #333;">
+                Use this if a predicted coach takes a P4 job that wasn't an opening 
+                (e.g., Dabo to Alabama). This is required for partial credit to work.
+            </p>
+            <form method="POST" class="form-group">
+                <input type="text" name="other_school" placeholder="School Name (e.g., Alabama)" 
+                       style="flex: 1;" required>
+                <input type="text" name="other_coach" 
+                       placeholder="Coach Name (e.g., Dabo Swinney (HC - Clemson))" 
+                       style="flex: 2;" required>
+                <button type="submit" name="add_other_hire" class="btn">Add Hire</button>
+            </form>
+        </div>
+
+        <div class="section">
             <h2>Mark Wild Card School as Opened</h2>
-            <form method="POST" style="display: flex; align-items: center; gap: 10px;">
+            <form method="POST" class="form-group">
                 <select name="wildcard_school" required>
                     <option value="">Select a school...</option>
                     <?php foreach ($wildcardSchools as $school): ?>
@@ -382,7 +488,7 @@ function calculateAllScores($db) {
                                 <?php if ($result['is_filled']): ?>
                                     <?= htmlspecialchars($result['hired_coach']) ?>
                                 <?php else: ?>
-                                    <form method="POST" style="display: flex; gap: 10px;">
+                                    <form method="POST" class="form-group">
                                         <input type="hidden" name="school" value="<?= htmlspecialchars($result['school']) ?>">
                                         <input type="text" name="hired_coach" placeholder="Enter coach name" required>
                                         <button type="submit" name="update_result" class="btn btn-small">Update</button>

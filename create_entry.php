@@ -4,17 +4,7 @@ require_once 'config.php';
 $error = '';
 $success = '';
 
-// --- NEW AUTH CHECK ---
-// A user MUST be either a new user (from index.php) or an auth'd user (from auth.php)
-if (!isset($_SESSION['new_user_email']) && !isset($_SESSION['auth_entry_id'])) {
-    // If not, send them back to the start
-    header('Location: index.php');
-    exit;
-}
-// --- END AUTH CHECK ---
-
-
-// Check if we are loading this page from a magic link
+// Check if we are loading this page from a magic link (set in auth.php)
 if (isset($_SESSION['load_success'])) {
     $success = $_SESSION['load_success'];
     unset($_SESSION['load_success']);
@@ -25,53 +15,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!GAME_ACTIVE) {
         $error = 'Submissions are currently closed.';
     } else {
-        // We trust the email from the session
-        $email = $_SESSION['new_user_email'] ?? $_SESSION['email'] ?? '';
+        $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
         $nickname = trim($_POST['nickname'] ?? '');
         $wildcards = $_POST['wildcards'] ?? [];
         
-        if (empty($email)) {
-            $error = 'Your session has expired. Please start over from the login page.';
+        // Validation
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Please enter a valid email address.';
         } elseif (empty($nickname)) {
             $error = 'Please enter a nickname.';
         } elseif (count($wildcards) !== 4) {
             $error = 'Please select exactly 4 Wild Card schools.';
         } else {
             $db = getDB();
+            $stmt = $db->prepare("SELECT id, bonus_points FROM entries WHERE email = ?");
+            $stmt->execute([$email]);
+            $existing_entry = $stmt->fetch();
             
-            // Check if this is an OVERWRITE (auth'd user)
-            if (isset($_SESSION['auth_entry_id'])) {
-                $db->beginTransaction();
-                try {
-                    $entry_id = $_SESSION['auth_entry_id'];
-                    // Delete the old entry
-                    $delete_stmt = $db->prepare("DELETE FROM entries WHERE id = ?");
-                    $delete_stmt->execute([$entry_id]);
-                    $db->commit();
-                    
-                    // Unset auth flags
-                    unset($_SESSION['auth_entry_id']);
-                    // Set edit_entry_id to load old coach picks in step 2
-                    $_SESSION['edit_entry_id'] = $entry_id; 
+            // Check if user is a RETURNING PLAYER
+            if ($existing_entry) {
+                
+                // Check if they are authorized (i.e., they just clicked a magic link)
+                if (isset($_SESSION['auth_entry_id']) && $_SESSION['auth_entry_id'] === $existing_entry['id']) {
+                    // --- SECURE OVERWRITE LOGIC ---
+                    $db->beginTransaction();
+                    try {
+                        
+                        // --- THIS IS THE FIX ---
+                        // 1. Get old data *before* deleting
+                        $entry_id_to_edit = $existing_entry['id'];
+                        
+                        // 1a. Get old coach picks
+                        $stmt = $db->prepare("SELECT school, coach_name FROM coach_predictions WHERE entry_id = ?");
+                        $stmt->execute([$entry_id_to_edit]);
+                        $old_coach_picks = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+                        
+                        // 1b. Get old bonus points
+                        $old_bonus_points = (int)$existing_entry['bonus_points'];
+                        // --- END FIX ---
 
-                } catch (Exception $e) {
-                    $db->rollBack();
-                    $error = 'An error occurred while overwriting. Please try again.';
+                        // 2. Delete the old entry (ON DELETE CASCADE handles the rest)
+                        $delete_stmt = $db->prepare("DELETE FROM entries WHERE id = ?");
+                        $delete_stmt->execute([$entry_id_to_edit]);
+                        $db->commit();
+                        
+                        // 3. Unset the auth flag
+                        unset($_SESSION['auth_entry_id']);
+                        
+                        // 4. Proceed as a new user (with the data they just submitted)
+                        $_SESSION['email'] = $email;
+                        $_SESSION['nickname'] = $nickname;
+                        $_SESSION['wildcards'] = $wildcards;
+                        
+                        // 5. Store the old data in the session for step2.php
+                        $_SESSION['old_coach_picks'] = $old_coach_picks;
+                        $_SESSION['old_bonus_points'] = $old_bonus_points;
+                        
+                        header('Location: step2.php');
+                        exit;
+                    } catch (Exception $e) {
+                        $db->rollBack();
+                        $error = 'An error occurred while overwriting. Please try again.';
+                    }
+                    
+                } else {
+                    // User is not authorized. Send them a link.
+                    // This logic is in index.php now, so we just clear the session
+                    // in case they got here by pressing "Back".
+                    unset($_SESSION['new_user_email']);
+                    header('Location: index.php?error=existing_email');
+                    exit;
                 }
-            }
-            
-            // If no error, proceed to save
-            if (empty($error)) {
-                // Set session for step 2
-                $_SESSION['email'] = $email; // This is now the confirmed email
+            } else {
+                // --- NEW PLAYER LOGIC ---
+                // Email is new. Proceed as normal.
+                $_SESSION['email'] = $email;
                 $_SESSION['nickname'] = $nickname;
                 $_SESSION['wildcards'] = $wildcards;
-                
-                // Unset the new user flag
-                if(isset($_SESSION['new_user_email'])) {
-                    unset($_SESSION['new_user_email']);
-                }
-                
+                // Make sure old bonus points aren't set for new users
+                unset($_SESSION['old_bonus_points']); 
                 header('Location: step2.php');
                 exit;
             }
@@ -79,11 +101,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// --- Pre-fill form data from session ---
-$entry_email = $_SESSION['new_user_email'] ?? $_SESSION['email'] ?? '';
+// --- Check for session data to pre-fill the form ---
+// This happens after a user clicks the magic link from auth.php
+// OR if they are a new user from index.php
+$entry_email = $_SESSION['email'] ?? $_SESSION['new_user_email'] ?? $_POST['email'] ?? '';
 $entry_nickname = $_SESSION['nickname'] ?? $_POST['nickname'] ?? '';
-$entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
+$entry_wildcards = $_SESSION['wildcards'] ?? []; // This is now loaded by auth.php
 
+// If the email field is empty, they don't belong here. Send to start.
+if (empty($entry_email)) {
+    header('Location: index.php');
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -181,15 +210,15 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
             margin-bottom: 20px;
             transition: border-color 0.3s;
         }
+        /* Make email read-only for editing users */
+        input[type="email"][readonly] {
+            background: #f0f0f0;
+            cursor: not-allowed;
+        }
+
         input[type="email"]:focus, input[type="text"]:focus {
             outline: none;
             border-color: #667eea;
-        }
-        /* Make email field read-only */
-        input[type="email"][readonly] {
-            background: #f0f0f0;
-            color: #666;
-            cursor: not-allowed;
         }
         .wildcard-section {
             margin: 30px 0;
@@ -279,6 +308,7 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
             border-radius: 8px;
             margin-bottom: 20px;
         }
+        
         .submit-btn {
             background: #667eea;
             color: white;
@@ -309,7 +339,7 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
             <?php if (isset($_SESSION['auth_entry_id'])): ?>
                 STEP 1 of 2: Review and Edit Your Picks
             <?php else: ?>
-                STEP 1 of 2: Create Your Entry
+                STEP 1 of 2: Select Your Wild Card Schools
             <?php endif; ?>
         </div>
         
@@ -339,10 +369,11 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
         <?php if (GAME_ACTIVE): ?>
         
             <form method="POST" id="gameForm">
-                <label for="email">Email Address (Locked)</label>
-                <input type="email" id="email" name="email_display" required 
+                <label for="email">Email Address *</label>
+                <input type="email" id="email" name="email" required 
                        value="<?= htmlspecialchars($entry_email) ?>"
-                       readonly>
+                       placeholder="your.email@example.com"
+                       <?php if (isset($_SESSION['auth_entry_id'])) echo 'readonly'; ?>>
                 
                 <label for="nickname">Nickname / Display Name *</label>
                 <input type="text" id="nickname" name="nickname" required 
@@ -402,8 +433,14 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
         <?php else: ?>
             <div class="info-box" style="background: #fff3cd; border-color: #ffc107; text-align: center;">
                 <h3 style="font-size: 24px;">Submissions Are Closed</h3>
+                <p style="font-size: 16px; margin-top: 10px; line-height: 1.6;">
+                    The game is now locked. No new entries are allowed. 
+                    Good luck! <br>You can check the <a href="leaderboard.php" style="color: #667eea; font-weight: 600;">Leaderboard</a> 
+                    to see the results as they come in.
+                </p>
             </div>
         <?php endif; ?>
+
     </div>
     
     <script>
@@ -416,8 +453,10 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
         filterBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const conference = btn.dataset.conference;
+                
                 filterBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                
                 schoolOptions.forEach(option => {
                     if (conference === 'all' || option.dataset.conference === conference) {
                         option.style.display = 'block';
@@ -452,6 +491,7 @@ $entry_wildcards = $_SESSION['wildcards'] ?? []; // This is loaded by auth.php
         }
         
         checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
+        // Run on page load to pre-check the count
         updateCount();
     </script>
 </body>

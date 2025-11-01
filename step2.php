@@ -10,19 +10,14 @@ if (!isset($_SESSION['email']) || !isset($_SESSION['wildcards'])) {
 
 $error = '';
 
-// --- Load old picks if this is an edit ---
+// --- THIS IS THE FIX ---
+// Load old picks if this is an edit
 $old_coach_picks = [];
-if (isset($_SESSION['edit_entry_id'])) {
-    $db = getDB();
-    $stmt = $db->prepare("SELECT school, coach_name FROM coach_predictions WHERE entry_id = ?");
-    $stmt->execute([$_SESSION['edit_entry_id']]);
-    // Fetch as key/value pairs (School => Coach)
-    $old_coach_picks = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-    
-    // We are done with this session variable
-    unset($_SESSION['edit_entry_id']);
+if (isset($_SESSION['old_coach_picks'])) {
+    $old_coach_picks = $_SESSION['old_coach_picks'];
+    unset($_SESSION['old_coach_picks']); // Clean up session
 }
-// --- END NEW ---
+// --- END FIX ---
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -42,23 +37,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$allFilled) {
         $error = 'Please enter a coach name for all 12 schools.';
     } else {
-        // --- Calculate Bonus Points ---
-        $bonus_podcast = (int)($_POST['bonus_podcast'] ?? 0);
-        $bonus_youtube = (int)($_POST['bonus_youtube'] ?? 0);
-        $bonus_newsletter = isset($_POST['bonus_newsletter']) ? 1 : 0;
         
-        // Calculate total bonus
+        // --- THIS IS THE FIX for Bonus Points ---
         $total_bonus = 0;
-        if ($bonus_podcast === 1) $total_bonus += 20;
-        if ($bonus_youtube === 1) $total_bonus += 20;
-        if ($bonus_newsletter === 1) $total_bonus += 10;
-        // --- END NEW ---
+        if (isset($_SESSION['old_bonus_points'])) {
+            // This is an editing user, use their saved points
+            $total_bonus = (int)$_SESSION['old_bonus_points'];
+        } else {
+            // This is a new user, calculate their points
+            $bonus_podcast = (int)($_POST['bonus_podcast'] ?? 0);
+            $bonus_youtube = (int)($_POST['bonus_youtube'] ?? 0);
+            $bonus_newsletter = isset($_POST['bonus_newsletter']) ? 1 : 0;
+            
+            if ($bonus_podcast === 1) $total_bonus += 20;
+            if ($bonus_youtube === 1) $total_bonus += 20;
+            if ($bonus_newsletter === 1) $total_bonus += 10;
+        }
+        // --- END FIX ---
 
         try {
             $db = getDB();
             $db->beginTransaction();
             
-            // --- MODIFIED: Save bonus_points AND set total_score to bonus_points ---
+            // Save bonus_points AND set total_score to bonus_points
             $stmt = $db->prepare("INSERT INTO entries (email, nickname, bonus_points, total_score) VALUES (?, ?, ?, ?)");
             $stmt->execute([$_SESSION['email'], $_SESSION['nickname'], $total_bonus, $total_bonus]);
             $entryId = $db->lastInsertId();
@@ -90,10 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'email' => $_SESSION['email'],
                 'entry_id' => $entryId
             ];
+            // Clean up all session data
             unset($_SESSION['email'], $_SESSION['nickname'], $_SESSION['wildcards']);
-            // Clean up any remaining auth flags
             unset($_SESSION['auth_entry_id']);
             unset($_SESSION['new_user_email']);
+            unset($_SESSION['old_bonus_points']);
             
             header('Location: confirmation.php');
             exit;
@@ -106,6 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
+// Check if this is an editing user (for hiding bonus section)
+$is_editing_user = isset($_SESSION['old_bonus_points']);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -459,51 +464,56 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                 <?php endforeach; ?>
             </div>
 
-            <div class="section bonus-section">
-                <h2>🎁 Get 50 Bonus Points!</h2>
-                
-                <!-- Podcast Item -->
-                <div class="bonus-item">
-                    <div class="bonus-item-desc">
-                        <strong>Follow the Podcast (+20 pts)</strong>
-                        <p>Click to follow on your favorite app.</p>
-                        <div class="bonus-links">
-                            <a href="https://apple.co/solidverbal" target="_blank" class="bonus-link" data-type="podcast">Apple</a>
-                            <span>|</span>
-                            <a href="https://open.spotify.com/show/0MABqnjJ8GlteE1Ql9xOEs?si=vKos4dmzSNyIrSfrwDgpVw" target="_blank" class="bonus-link" data-type="podcast">Spotify</a>
+            <!-- === THIS IS THE FIX for Bonus Points === -->
+            <!-- We only show this section if they are NOT an editing user -->
+            <?php if (!$is_editing_user): ?>
+                <div class="section bonus-section">
+                    <h2>🎁 Get 50 Bonus Points!</h2>
+                    
+                    <!-- Podcast Item -->
+                    <div class="bonus-item">
+                        <div class="bonus-item-desc">
+                            <strong>Follow the Podcast (+20 pts)</strong>
+                            <p>Click to follow on your favorite app.</p>
+                            <div class="bonus-links">
+                                <a href="https://apple.co/solidverbal" target="_blank" class="bonus-link" data-type="podcast">Apple</a>
+                                <span>|</span>
+                                <a href="https://open.spotify.com/show/0MABqnjJ8GlteE1Ql9xOEs?si=vKos4dmzSNyIrSfrwDgpVw" target="_blank" class="bonus-link" data-type="podcast">Spotify</a>
+                            </div>
+                        </div>
+                        <div class="bonus-status" id="podcast-status">Pending</div>
+                    </div>
+
+                    <!-- YouTube Item -->
+                    <div class="bonus-item">
+                        <div class="bonus-item-desc">
+                            <strong>Subscribe on YouTube (+20 pts)</strong>
+                            <p>Click to subscribe to the channel.</p>
+                            <div class="bonus-links">
+                                 <a href="https://www.youtube.com/@solidverbal?sub_confirmation=1" target="_blank" class="bonus-link" data-type="youtube">YouTube</a>
+                            </div>
+                        </div>
+                        <div class="bonus-status" id="youtube-status">Pending</div>
+                    </div>
+                    
+                    <!-- Newsletter Item -->
+                    <div class="bonus-item">
+                        <div class="bonus-item-desc">
+                            <strong>Join the Newsletter (+10 pts)</strong>
+                            <p>Check the box to get the best CFB news.</p>
+                        </div>
+                        <div class="newsletter-check">
+                            <input type="checkbox" name="bonus_newsletter" id="bonus_newsletter" value="1">
+                            <label for="bonus_newsletter">Sign Up!</label>
                         </div>
                     </div>
-                    <div class="bonus-status" id="podcast-status">Pending</div>
-                </div>
 
-                <!-- YouTube Item -->
-                <div class="bonus-item">
-                    <div class="bonus-item-desc">
-                        <strong>Subscribe on YouTube (+20 pts)</strong>
-                        <p>Click to subscribe to the channel.</p>
-                        <div class="bonus-links">
-                             <a href="https://www.youtube.com/@solidverbal?sub_confirmation=1" target="_blank" class="bonus-link" data-type="youtube">YouTube</a>
-                        </div>
-                    </div>
-                    <div class="bonus-status" id="youtube-status">Pending</div>
+                    <!-- Hidden inputs to track clicks -->
+                    <input type="hidden" name="bonus_podcast" id="bonus_podcast" value="0">
+                    <input type="hidden" name="bonus_youtube" id="bonus_youtube" value="0">
                 </div>
-                
-                <!-- Newsletter Item -->
-                <div class="bonus-item">
-                    <div class="bonus-item-desc">
-                        <strong>Join the Newsletter (+10 pts)</strong>
-                        <p>Check the box to get the best CFB news.</p>
-                    </div>
-                    <div class="newsletter-check">
-                        <input type="checkbox" name="bonus_newsletter" id="bonus_newsletter" value="1">
-                        <label for="bonus_newsletter">Sign Up!</label>
-                    </div>
-                </div>
-
-                <!-- Hidden inputs to track clicks -->
-                <input type="hidden" name="bonus_podcast" id="bonus_podcast" value="0">
-                <input type="hidden" name="bonus_youtube" id="bonus_youtube" value="0">
-            </div>
+            <?php endif; ?>
+            <!-- === END FIX === -->
             
             <div class="button-group">
                 <a href="create_entry.php" class="btn btn-secondary">← Back to Step 1</a>
@@ -615,16 +625,20 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
                     const type = e.target.dataset.type;
                     
                     if (type === 'podcast') {
-                        document.getElementById('bonus_podcast').value = '1';
                         const statusEl = document.getElementById('podcast-status');
-                        statusEl.textContent = '✅ Done!';
-                        statusEl.classList.add('completed');
+                        if(statusEl) {
+                            document.getElementById('bonus_podcast').value = '1';
+                            statusEl.textContent = '✅ Done!';
+                            statusEl.classList.add('completed');
+                        }
                     } 
                     else if (type === 'youtube') {
-                        document.getElementById('bonus_youtube').value = '1';
                         const statusEl = document.getElementById('youtube-status');
-                        statusEl.textContent = '✅ Done!';
-                        statusEl.classList.add('completed');
+                        if(statusEl) {
+                            document.getElementById('bonus_youtube').value = '1';
+                            statusEl.textContent = '✅ Done!';
+                            statusEl.classList.add('completed');
+                        }
                     }
                 });
             });
@@ -632,4 +646,3 @@ $allSchools = array_merge($EXISTING_OPENINGS, $_SESSION['wildcards']);
     </script>
 </body>
 </html>
-

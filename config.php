@@ -110,10 +110,9 @@ function getDB() {
     }
 }
 
-
-// --- NEW GLOBAL SCORING FUNCTION ---
 /**
  * Recalculates scores for ALL entries.
+ * This is the global scoring function used by admin.php and view_entries.php
  */
 function calculateAllScores($db) {
     // MODIFIED: Fetch bonus_points along with id
@@ -151,7 +150,7 @@ function calculateAllScores($db) {
                 $points = -50; // Incorrect
             }
             
-            // Update wildcard points in DB
+            // Update wildcard points in DB (this is safe, we just fetched it)
             $db->prepare("UPDATE wildcard_picks SET points = ? WHERE entry_id = ? AND school = ?")
                ->execute([$points, $entryId, $wc['school']]);
             
@@ -217,4 +216,5 @@ function calculateAllScores($db) {
            ->execute([$totalScore, $entryId]);
     }
 }
-?>
+
+// --- DO NOT ADD A ?> CLOSING TAG BELOW THIS LINE ---

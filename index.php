@@ -92,8 +92,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coaching Carousel Game</title>
-    <!-- Removed inline styles and linked the external stylesheet -->
+    <!-- Linked the external stylesheet -->
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- This override block fixes the login box width -->
+    <style>
+        .hero-section .login-box {
+            width: auto; /* Resets the 300px width from admin style */
+            margin: 0;   /* Resets the margin: 0 auto */
+        }
+    </style>
 </head>
 <body>
 

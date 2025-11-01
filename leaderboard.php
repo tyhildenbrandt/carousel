@@ -35,34 +35,36 @@ $leaderboard = $stmt->fetchAll();
 
 // --- New: Get Game Statistics ---
 
-// 1. Most Popular Wildcard Picks
+// 1. Most Picked Openings (Wildcards) - Top 3
 $popularWildcards = $db->query("
     SELECT school, COUNT(*) as pick_count
     FROM wildcard_picks
     GROUP BY school
     ORDER BY pick_count DESC
-    LIMIT 5
+    LIMIT 3
 ")->fetchAll();
-
-// 2. Most Predicted Hire for each original opening
-$popularHires = $db->query("
-    SELECT school, coach_name, pick_count
-    FROM (
-        SELECT 
-            school, 
-            coach_name, 
-            COUNT(*) as pick_count,
-            ROW_NUMBER() OVER(PARTITION BY school ORDER BY COUNT(*) DESC) as rn
-        FROM coach_predictions
-        WHERE is_wildcard = 0
-        GROUP BY school, coach_name
-    ) AS ranked_picks
-    WHERE rn = 1
-    ORDER BY school
-")->fetchAll();
-
-// Get total wildcard picks to calculate percentage
 $totalWildcardPicks = $db->query("SELECT COUNT(*) FROM wildcard_picks")->fetchColumn();
+
+// 2. Most Picked Coaches (All) - Top 3
+$popularCoaches = $db->query("
+    SELECT coach_name, COUNT(*) as pick_count
+    FROM coach_predictions
+    GROUP BY coach_name
+    ORDER BY pick_count DESC
+    LIMIT 3
+")->fetchAll();
+
+// 3. Most Picked Hirings (Pairings) - Top 3
+$popularHirings = $db->query("
+    SELECT school, coach_name, COUNT(*) as pick_count
+    FROM coach_predictions
+    GROUP BY school, coach_name
+    ORDER BY pick_count DESC
+    LIMIT 3
+")->fetchAll();
+
+// Total coach predictions for percentages
+$totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchColumn();
 
 ?>
 <!DOCTYPE html>
@@ -294,6 +296,17 @@ $totalWildcardPicks = $db->query("SELECT COUNT(*) FROM wildcard_picks")->fetchCo
             color: #667eea;
             font-weight: 600;
         }
+        .stat-item-just-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.25rem;
+            padding-left: 10px;
+        }
+        .stat-item-pick-no-logo {
+            font-size: 0.95rem;
+            color: #555;
+            padding-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -325,12 +338,12 @@ $totalWildcardPicks = $db->query("SELECT COUNT(*) FROM wildcard_picks")->fetchCo
             <!-- --- End Find My Rank --- -->
         </div>
 
-        <!-- --- New Stats Section --- -->
+        <!-- --- Updated Stats Section --- -->
         <div class="stats-section">
             <h2>Game Statistics</h2>
             <div class="stats-grid">
                 <div class="stats-col">
-                    <h3>Most Popular Wildcard Picks</h3>
+                    <h3>Most Picked Openings</h3>
                     <?php if (empty($popularWildcards)): ?>
                         <p>No picks made yet!</p>
                     <?php endif; ?>
@@ -342,25 +355,45 @@ $totalWildcardPicks = $db->query("SELECT COUNT(*) FROM wildcard_picks")->fetchCo
                                 <span><?= htmlspecialchars($pick['school']) ?></span>
                             </div>
                             <div class="stat-item-pick">
-                                Picked by <span class="percent"><?= $percent ?>%</span> of entries
+                                Picked <span class="percent"><?= $percent ?>%</span> of the time
                             </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
 
                 <div class="stats-col">
-                    <h3>Most Predicted Hires (Original 8)</h3>
-                    <?php if (empty($popularHires)): ?>
+                    <h3>Most Picked Coaches</h3>
+                     <?php if (empty($popularCoaches)): ?>
                         <p>No picks made yet!</p>
                     <?php endif; ?>
-                     <?php foreach ($popularHires as $pick): ?>
+                    <?php foreach ($popularCoaches as $pick): ?>
+                        <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
+                        <div class="stat-item">
+                            <div class="stat-item-just-name">
+                                <span><?= htmlspecialchars($pick['coach_name']) ?></span>
+                            </div>
+                            <div class="stat-item-pick-no-logo">
+                                Picked <span class="percent"><?= $percent ?>%</span> of the time
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                
+                <div class="stats-col">
+                    <h3>Most Picked Hirings</h3>
+                    <?php if (empty($popularHirings)): ?>
+                        <p>No picks made yet!</p>
+                    <?php endif; ?>
+                     <?php foreach ($popularHirings as $pick): ?>
+                        <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
                         <div class="stat-item">
                             <div class="stat-item-school">
                                 <?= displayLogo($pick['school'], 30) ?>
                                 <span><?= htmlspecialchars($pick['school']) ?></span>
                             </div>
                             <div class="stat-item-pick">
-                                <strong><?= htmlspecialchars($pick['coach_name']) ?></strong> (<?= $pick['pick_count'] ?> picks)
+                                <strong><?= htmlspecialchars($pick['coach_name']) ?></strong>
+                                (<span class="percent"><?= $percent ?>%</span> of picks)
                             </div>
                         </div>
                     <?php endforeach; ?>

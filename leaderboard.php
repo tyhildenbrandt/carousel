@@ -484,7 +484,17 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                         <span><?= htmlspecialchars($pick['school']) ?></span>
                                     </div>
                                     <div class="stat-item-pick">
-                                        <strong><?= htmlspecialchars($pick['coach_name']) ?></strong>
+                                        <?php
+                                        $coachParts = explode('(', htmlspecialchars($pick['coach_name']), 2);
+                                        $coachName = trim($coachParts[0]);
+                                        $coachDetails = isset($coachParts[1]) ? '(' . $coachParts[1] : '';
+                                        ?>
+                                        <strong>
+                                            <?= $coachName ?>
+                                            <?php if (!empty($coachDetails)): ?>
+                                                <br><small><?= $coachDetails ?></small>
+                                            <?php endif; ?>
+                                        </strong>
                                         (<span class="percent"><?= $percent ?>%</span> of picks)
                                     </div>
                                 </div>

@@ -285,28 +285,32 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
             font-size: 1.1rem;
             margin-bottom: 0.25rem;
         }
+        
+        /* --- THIS IS THE UPDATED STYLE --- */
         .stat-item-pick {
             font-size: 0.95rem;
-            color: #555;
             padding-left: 40px;
+            color: #667eea;
+            font-weight: 600;
         }
         .stat-item-pick strong {
             color: #333;
         }
-        .stat-item-pick .percent {
-            color: #667eea;
-            font-weight: 600;
-        }
+        /* Removed .stat-item-pick .percent */
+        
         .stat-item-just-name {
             font-weight: 600;
             font-size: 1.1rem;
             margin-bottom: 0.25rem;
             padding-left: 10px;
         }
+        
+        /* --- THIS IS THE UPDATED STYLE --- */
         .stat-item-pick-no-logo {
             font-size: 0.95rem;
-            color: #555;
             padding-left: 10px;
+            color: #667eea;
+            font-weight: 600;
         }
 
         /* --- New 2-Column Layout --- */
@@ -432,14 +436,15 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                 <p>No picks made yet!</p>
                             <?php endif; ?>
                             <?php foreach ($popularWildcards as $pick): ?>
-                                <?php $percent = ($totalWildcardPicks > 0) ? round(($pick['pick_count'] / $totalWildcardPicks) * 100) : 0; ?>
+                                <?php $percent = ($totalWildcardPicks > 0) ? round(($pick['pick_count'] / ($totalEntries * 4)) * 100) : 0; // Each entry has 4 wildcard picks ?>
                                 <div class="stat-item">
                                     <div class="stat-item-school">
                                         <?= displayLogo($pick['school'], 30) ?>
                                         <span><?= htmlspecialchars($pick['school']) ?></span>
                                     </div>
+                                    <!-- UPDATED HTML -->
                                     <div class="stat-item-pick">
-                                        Picked <span class="percent"><?= $percent ?>%</span> of the time
+                                        (<?= $percent ?>% of picks)
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -464,8 +469,9 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                             <br><small><?= $coachDetails ?></small>
                                         <?php endif; ?>
                                     </div>
+                                    <!-- UPDATED HTML -->
                                     <div class="stat-item-pick-no-logo">
-                                        Picked <span class="percent"><?= $percent ?>%</span> of the time
+                                        (<?= $percent ?>% of picks)
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -483,7 +489,7 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                         <?= displayLogo($pick['school'], 30) ?>
                                         <span><?= htmlspecialchars($pick['school']) ?></span>
                                     </div>
-                                    <div class="stat-item-pick">
+                                    <div class->
                                         <?php
                                         $coachParts = explode('(', htmlspecialchars($pick['coach_name']), 2);
                                         $coachName = trim($coachParts[0]);
@@ -495,7 +501,8 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                                 <br><small><?= $coachDetails ?></small>
                                             <?php endif; ?>
                                         </strong>
-                                        ( <span class="percent"><?= $percent ?>%</span> of picks)
+                                        <!-- UPDATED HTML -->
+                                        (<?= $percent ?>% of picks)
                                     </div>
                                 </div>
                             <?php endforeach; ?>

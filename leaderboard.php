@@ -82,7 +82,7 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
             padding: 2rem 1rem;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1200px; /* Increased max-width for 2-col layout */
             margin: 0 auto;
         }
         .header-section {
@@ -100,17 +100,17 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
         .subtitle {
             color: #666;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 0; /* Removed margin */
             font-size: 18px;
         }
         
-        /* --- New Find My Rank Styles --- */
+        /* --- Find My Rank Styles --- */
         .rank-finder {
-            background: #f8f9fa;
-            padding: 2rem;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            margin-bottom: 2rem;
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            /* margin-bottom: 2rem; Removed */
         }
         .rank-finder h2 {
             font-size: 1.5rem;
@@ -170,14 +170,14 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
             font-weight: 600;
             margin-top: 1rem;
         }
-        /* --- End New Styles --- */
+        /* --- End Find My Rank Styles --- */
 
         .leaderboard-section {
             background: white;
             padding: 2.5rem;
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            margin-top: 2rem;
+            /* margin-top: 2rem; Removed */
         }
         table {
             width: 100%;
@@ -247,13 +247,13 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
             margin-top: 30px;
         }
         
-        /* --- New Stats Section --- */
+        /* --- Stats Section --- */
         .stats-section {
             background: white;
             padding: 2.5rem;
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            margin-top: 2rem;
+            /* margin-top: 2rem; Removed */
         }
         .stats-section h2 {
             font-size: 1.75rem;
@@ -263,7 +263,8 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
         }
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            /* grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); */
+            grid-template-columns: 1fr; /* Changed to single column for sidebar */
             gap: 2rem;
         }
         .stats-col h3 {
@@ -307,154 +308,192 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
             color: #555;
             padding-left: 10px;
         }
+
+        /* --- New 2-Column Layout --- */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+            align-items: flex-start;
+        }
+        .leaderboard-column {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .stats-column {
+            /* This column will hold the stats section */
+        }
+
+        /* Responsive stacking */
+        @media (max-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 1fr; /* Stack columns */
+            }
+        }
+
     </style>
 </head>
 <body>
     <div class="container">
+        
+        <!-- Full-width header -->
         <div class="header-section">
             <h1>🏆 Leaderboard</h1>
             <p class="subtitle">Coaching Carousel Game Standings (<?= $totalEntries ?> Players)</p>
-
-            <!-- --- New Find My Rank Form --- -->
-            <div class="rank-finder">
-                <h2>Find Your Rank</h2>
-                <form method="POST" class="rank-finder-form">
-                    <input type="email" name="find_email" placeholder="Enter your email..." value="<?= htmlspecialchars($search_email) ?>" required>
-                    <button type="submit">Find Me</button>
-                </form>
-
-                <?php if ($myRankInfo): ?>
-                    <div class="your-position">
-                        <h3><?= htmlspecialchars($myRankInfo['nickname']) ?>, here's your rank:</h3>
-                        <div class="rank">#<?= $myRankInfo['rank'] ?></div>
-                        <div class="rank-desc">Score: <?= number_format($myRankInfo['total_score']) ?> points</div>
-                    </div>
-                <?php elseif ($_SERVER['REQUEST_METHOD'] === 'POST'): ?>
-                     <div class="your-position" style="background: #fee; border-color: #fcc;">
-                        <p class="not-found">Email not found. Please try again.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-            <!-- --- End Find My Rank --- -->
         </div>
 
-        <!-- --- Updated Stats Section --- -->
-        <div class="stats-section">
-            <h2>Game Statistics</h2>
-            <div class="stats-grid">
-                <div class="stats-col">
-                    <h3>Most Picked Openings</h3>
-                    <?php if (empty($popularWildcards)): ?>
-                        <p>No picks made yet!</p>
-                    <?php endif; ?>
-                    <?php foreach ($popularWildcards as $pick): ?>
-                        <?php $percent = ($totalWildcardPicks > 0) ? round(($pick['pick_count'] / $totalWildcardPicks) * 100) : 0; ?>
-                        <div class="stat-item">
-                            <div class="stat-item-school">
-                                <?= displayLogo($pick['school'], 30) ?>
-                                <span><?= htmlspecialchars($pick['school']) ?></span>
-                            </div>
-                            <div class="stat-item-pick">
-                                Picked <span class="percent"><?= $percent ?>%</span> of the time
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+        <!-- New Two-Column Layout -->
+        <div class="main-layout">
+            
+            <!-- Left Column -->
+            <div class="leaderboard-column">
+                
+                <!-- Search Bar -->
+                <div class="rank-finder">
+                    <h2>Find Your Rank</h2>
+                    <form method="POST" class="rank-finder-form">
+                        <input type="email" name="find_email" placeholder="Enter your email..." value="<?= htmlspecialchars($search_email) ?>" required>
+                        <button type="submit">Find Me</button>
+                    </form>
 
-                <div class="stats-col">
-                    <h3>Most Picked Coaches</h3>
-                     <?php if (empty($popularCoaches)): ?>
-                        <p>No picks made yet!</p>
-                    <?php endif; ?>
-                    <?php foreach ($popularCoaches as $pick): ?>
-                        <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
-                        <div class="stat-item">
-                            <div class="stat-item-just-name">
-                                <span><?= htmlspecialchars($pick['coach_name']) ?></span>
-                            </div>
-                            <div class="stat-item-pick-no-logo">
-                                Picked <span class="percent"><?= $percent ?>%</span> of the time
-                            </div>
+                    <?php if ($myRankInfo): ?>
+                        <div class="your-position">
+                            <h3><?= htmlspecialchars($myRankInfo['nickname']) ?>, here's your rank:</h3>
+                            <div class="rank">#<?= $myRankInfo['rank'] ?></div>
+                            <div class="rank-desc">Score: <?= number_format($myRankInfo['total_score']) ?> points</div>
                         </div>
-                    <?php endforeach; ?>
+                    <?php elseif ($_SERVER['REQUEST_METHOD'] === 'POST'): ?>
+                         <div class="your-position" style="background: #fee; border-color: #fcc;">
+                            <p class="not-found">Email not found. Please try again.</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 
-                <div class="stats-col">
-                    <h3>Most Picked Hirings</h3>
-                    <?php if (empty($popularHirings)): ?>
-                        <p>No picks made yet!</p>
-                    <?php endif; ?>
-                     <?php foreach ($popularHirings as $pick): ?>
-                        <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
-                        <div class="stat-item">
-                            <div class="stat-item-school">
-                                <?= displayLogo($pick['school'], 30) ?>
-                                <span><?= htmlspecialchars($pick['school']) ?></span>
-                            </div>
-                            <div class="stat-item-pick">
-                                <strong><?= htmlspecialchars($pick['coach_name']) ?></strong>
-                                (<span class="percent"><?= $percent ?>%</span> of picks)
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
+                <!-- Leaderboard Table -->
+                <div class="leaderboard-section">
+                    <h2>All Players</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Player</th>
+                                <th>Score</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($leaderboard)): ?>
+                                <tr>
+                                    <td colspan="4" style="text-align: center; padding: 40px; color: #666;">
+                                        No entries yet. Be the first to play!
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($leaderboard as $index => $entry): ?>
+                                    <?php 
+                                    $rank = $index + 1;
+                                    $rankClass = "rank-cell";
+                                    $trophy = "";
+                                    if ($rank === 1) {
+                                        $rankClass .= " rank-1";
+                                        $trophy = "🥇";
+                                    } elseif ($rank === 2) {
+                                        $rankClass .= " rank-2";
+                                        $trophy = "🥈";
+                                    } elseif ($rank === 3) {
+                                        $rankClass .= " rank-3";
+                                        $trophy = "🥉";
+                                    }
+                                    
+                                    // Highlight this row if it matches the search
+                                    $highlightClass = ($myRankInfo && $myRankInfo['nickname'] === $entry['nickname']) ? 'highlight' : '';
+                                    ?>
+                                    <tr class="<?= $highlightClass ?>">
+                                        <td class="<?= $rankClass ?>"><?= $rank ?><span class="trophy"><?= $trophy ?></span></td>
+                                        <td><?= htmlspecialchars($entry['nickname']) ?></td>
+                                        <td class="score-cell"><?= number_format($entry['total_score']) ?></td>
+                                        <td class="date-cell"><?= date('M j, Y', strtotime($entry['submission_date'])) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                    
+                    <div class="button-group">
+                        <a href="index.php" class="btn">Make Your Predictions</a>
+                    </div>
                 </div>
             </div>
-        </div>
-        <!-- --- End Stats Section --- -->
+
+            <!-- Right Column -->
+            <div class="stats-column">
+                <!-- Stats Section -->
+                <div class="stats-section">
+                    <h2>Game Statistics</h2>
+                    <div class="stats-grid">
+                        <div class="stats-col">
+                            <h3>Most Picked Openings</h3>
+                            <?php if (empty($popularWildcards)): ?>
+                                <p>No picks made yet!</p>
+                            <?php endif; ?>
+                            <?php foreach ($popularWildcards as $pick): ?>
+                                <?php $percent = ($totalWildcardPicks > 0) ? round(($pick['pick_count'] / $totalWildcardPicks) * 100) : 0; ?>
+                                <div class="stat-item">
+                                    <div class="stat-item-school">
+                                        <?= displayLogo($pick['school'], 30) ?>
+                                        <span><?= htmlspecialchars($pick['school']) ?></span>
+                                    </div>
+                                    <div class="stat-item-pick">
+                                        Picked <span class="percent"><?= $percent ?>%</span> of the time
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
         
-        <div class="leaderboard-section">
-            <h2>All Players</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Player</th>
-                        <th>Score</th>
-                        <th>Submitted</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($leaderboard)): ?>
-                        <tr>
-                            <td colspan="4" style="text-align: center; padding: 40px; color: #666;">
-                                No entries yet. Be the first to play!
-                            </td>
-                        </tr>
-                    <?php else: ?>
-                        <?php foreach ($leaderboard as $index => $entry): ?>
-                            <?php 
-                            $rank = $index + 1;
-                            $rankClass = "rank-cell";
-                            $trophy = "";
-                            if ($rank === 1) {
-                                $rankClass .= " rank-1";
-                                $trophy = "🥇";
-                            } elseif ($rank === 2) {
-                                $rankClass .= " rank-2";
-                                $trophy = "🥈";
-                            } elseif ($rank === 3) {
-                                $rankClass .= " rank-3";
-                                $trophy = "🥉";
-                            }
-                            
-                            // Highlight this row if it matches the search
-                            $highlightClass = ($myRankInfo && $myRankInfo['nickname'] === $entry['nickname']) ? 'highlight' : '';
-                            ?>
-                            <tr class="<?= $highlightClass ?>">
-                                <td class="<?= $rankClass ?>"><?= $rank ?><span class="trophy"><?= $trophy ?></span></td>
-                                <td><?= htmlspecialchars($entry['nickname']) ?></td>
-                                <td class="score-cell"><?= number_format($entry['total_score']) ?></td>
-                                <td class="date-cell"><?= date('M j, Y', strtotime($entry['submission_date'])) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-            
-            <div class="button-group">
-                <a href="index.php" class="btn">Make Your Predictions</a>
+                        <div class="stats-col">
+                            <h3>Most Picked Coaches</h3>
+                             <?php if (empty($popularCoaches)): ?>
+                                <p>No picks made yet!</p>
+                            <?php endif; ?>
+                            <?php foreach ($popularCoaches as $pick): ?>
+                                <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
+                                <div class="stat-item">
+                                    <div class="stat-item-just-name">
+                                        <span><?= htmlspecialchars($pick['coach_name']) ?></span>
+                                    </div>
+                                    <div class="stat-item-pick-no-logo">
+                                        Picked <span class="percent"><?= $percent ?>%</span> of the time
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <div class="stats-col">
+                            <h3>Most Picked Hirings</h3>
+                            <?php if (empty($popularHirings)): ?>
+                                <p>No picks made yet!</p>
+                            <?php endif; ?>
+                             <?php foreach ($popularHirings as $pick): ?>
+                                <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
+                                <div class="stat-item">
+                                    <div class="stat-item-school">
+                                        <?= displayLogo($pick['school'], 30) ?>
+                                        <span><?= htmlspecialchars($pick['school']) ?></span>
+                                    </div>
+                                    <div class="stat-item-pick">
+                                        <strong><?= htmlspecialchars($pick['coach_name']) ?></strong>
+                                        (<span class="percent"><?= $percent ?>%</span> of picks)
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+
+        </div> <!-- end .main-layout -->
     </div>
 </body>
 </html>

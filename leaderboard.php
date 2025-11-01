@@ -296,7 +296,6 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
         .stat-item-pick strong {
             color: #333;
         }
-        /* Removed .stat-item-pick .percent */
         
         .stat-item-just-name {
             font-weight: 600;
@@ -312,6 +311,21 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
             color: #667eea;
             font-weight: 600;
         }
+
+        /* --- NEW CLASS FOR HIRING NAME --- */
+        .stat-item-coach-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #333;
+            padding-left: 40px; /* Align with percent */
+            margin-bottom: 0.25rem;
+        }
+        .stat-item-coach-name small {
+            color: #555;
+            font-weight: 400;
+        }
+        /* --- END NEW CLASS --- */
+
 
         /* --- New 2-Column Layout --- */
         .main-layout {
@@ -489,21 +503,24 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                         <?= displayLogo($pick['school'], 30) ?>
                                         <span><?= htmlspecialchars($pick['school']) ?></span>
                                     </div>
-                                    <div class->
-                                        <?php
-                                        $coachParts = explode('(', htmlspecialchars($pick['coach_name']), 2);
-                                        $coachName = trim($coachParts[0]);
-                                        $coachDetails = isset($coachParts[1]) ? '(' . $coachParts[1] : '';
-                                        ?>
-                                        <strong>
-                                            <?= $coachName ?>
-                                            <?php if (!empty($coachDetails)): ?>
-                                                <br><small><?= $coachDetails ?></small>
-                                            <?php endif; ?>
-                                        </strong>
-                                        <!-- UPDATED HTML -->
+
+                                    <!-- UPDATED HTML BLOCK -->
+                                    <?php
+                                    $coachParts = explode('(', htmlspecialchars($pick['coach_name']), 2);
+                                    $coachName = trim($coachParts[0]);
+                                    $coachDetails = isset($coachParts[1]) ? '(' . $coachParts[1] : '';
+                                    ?>
+                                    <div class="stat-item-coach-name">
+                                        <span><?= $coachName ?></span>
+                                        <?php if (!empty($coachDetails)): ?>
+                                            <br><small><?= $coachDetails ?></small>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="stat-item-pick">
                                         (<?= $percent ?>% of picks)
                                     </div>
+                                    <!-- END UPDATED BLOCK -->
+
                                 </div>
                             <?php endforeach; ?>
                         </div>

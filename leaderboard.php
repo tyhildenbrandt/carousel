@@ -495,7 +495,7 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                                 <br><small><?= $coachDetails ?></small>
                                             <?php endif; ?>
                                         </strong>
-                                        (<span class="percent"><?= $percent ?>%</span> of picks)
+                                        ( <span class="percent"><?= $percent ?>%</span> of picks)
                                     </div>
                                 </div>
                             <?php endforeach; ?>

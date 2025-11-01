@@ -338,20 +338,16 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
 <body>
     <div class="container">
         
-        <!-- Full-width header -->
-        <div class="header-section">
+        <!-- Full-width header --><div class="header-section">
             <h1>🏆 Leaderboard</h1>
             <p class="subtitle">Coaching Carousel Game Standings (<?= $totalEntries ?> Players)</p>
         </div>
 
-        <!-- New Two-Column Layout -->
-        <div class="main-layout">
+        <!-- New Two-Column Layout --><div class="main-layout">
             
-            <!-- Left Column -->
-            <div class="leaderboard-column">
+            <!-- Left Column --><div class="leaderboard-column">
                 
-                <!-- Search Bar -->
-                <div class="rank-finder">
+                <!-- Search Bar --><div class="rank-finder">
                     <h2>Find Your Rank</h2>
                     <form method="POST" class="rank-finder-form">
                         <input type="email" name="find_email" placeholder="Enter your email..." value="<?= htmlspecialchars($search_email) ?>" required>
@@ -371,8 +367,7 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                     <?php endif; ?>
                 </div>
                 
-                <!-- Leaderboard Table -->
-                <div class="leaderboard-section">
+                <!-- Leaderboard Table --><div class="leaderboard-section">
                     <h2>All Players</h2>
                     <table>
                         <thead>
@@ -427,10 +422,8 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                 </div>
             </div>
 
-            <!-- Right Column -->
-            <div class="stats-column">
-                <!-- Stats Section -->
-                <div class="stats-section">
+            <!-- Right Column --><div class="stats-column">
+                <!-- Stats Section --><div class="stats-section">
                     <h2>Game Statistics</h2>
                     <div class="stats-grid">
                         <div class="stats-col">
@@ -458,10 +451,18 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                 <p>No picks made yet!</p>
                             <?php endif; ?>
                             <?php foreach ($popularCoaches as $pick): ?>
-                                <?php $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0; ?>
+                                <?php
+                                $coachParts = explode('(', htmlspecialchars($pick['coach_name']), 2);
+                                $coachName = trim($coachParts[0]);
+                                $coachDetails = isset($coachParts[1]) ? '(' . $coachParts[1] : '';
+                                $percent = ($totalCoachPicks > 0) ? round(($pick['pick_count'] / $totalCoachPicks) * 100) : 0;
+                                ?>
                                 <div class="stat-item">
                                     <div class="stat-item-just-name">
-                                        <span><?= htmlspecialchars($pick['coach_name']) ?></span>
+                                        <span><?= $coachName ?></span>
+                                        <?php if (!empty($coachDetails)): ?>
+                                            <br><small><?= $coachDetails ?></small>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="stat-item-pick-no-logo">
                                         Picked <span class="percent"><?= $percent ?>%</span> of the time
@@ -493,7 +494,6 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                 </div>
             </div>
 
-        </div> <!-- end .main-layout -->
-    </div>
+        </div> <!-- end .main-layout --></div>
 </body>
 </html>

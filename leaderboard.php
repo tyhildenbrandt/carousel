@@ -73,288 +73,12 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaderboard - Coaching Carousel Game</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem 1rem;
-        }
-        .container {
-            max-width: 1200px; /* Increased max-width for 2-col layout */
-            margin: 0 auto;
-        }
-        .header-section {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 36px;
-        }
-        .subtitle {
-            color: #666;
-            text-align: center;
-            margin-bottom: 0; /* Removed margin */
-            font-size: 18px;
-        }
-        
-        /* --- Find My Rank Styles --- */
-        .rank-finder {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            /* margin-bottom: 2rem; Removed */
-        }
-        .rank-finder h2 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            text-align: center;
-        }
-        .rank-finder-form {
-            display: flex;
-            gap: 10px;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        .rank-finder-form input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ccc;
-            border-radius: 6px;
-            font-size: 1rem;
-            flex-grow: 1;
-        }
-        .rank-finder-form button {
-            background: #667eea;
-            color: white;
-            padding: 0 25px;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        .rank-finder-form button:hover { background: #5568d3; }
-
-        .your-position {
-            background: #e8f4f8;
-            border: 2px solid #667eea;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 1.5rem;
-            text-align: center;
-        }
-        .your-position h3 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        .your-position .rank {
-            font-size: 48px;
-            font-weight: 700;
-            color: #667eea;
-        }
-        .your-position .rank-desc {
-            font-size: 1.1rem;
-            color: #555;
-        }
-        .not-found {
-            color: #c33;
-            font-weight: 600;
-            margin-top: 1rem;
-        }
-        /* --- End Find My Rank Styles --- */
-
-        .leaderboard-section {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            /* margin-top: 2rem; Removed */
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        thead {
-            background: #667eea;
-            color: white;
-        }
-        th {
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-        }
-        th:first-child { border-radius: 8px 0 0 0; }
-        th:last-child { border-radius: 0 8px 0 0; }
-        tbody tr {
-            border-bottom: 1px solid #eee;
-        }
-        tbody tr:last-child {
-            border-bottom: none;
-        }
-        tbody tr:hover {
-            background: #f8f9fa;
-        }
-        tbody tr.highlight {
-            background: #e8f4f8;
-            border-left: 4px solid #667eea;
-            border-right: 4px solid #667eea;
-        }
-        td {
-            padding: 15px;
-        }
-        .rank-cell {
-            font-weight: 700;
-            color: #667eea;
-            font-size: 18px;
-        }
-        .rank-1 { color: #FFD700; }
-        .rank-2 { color: #C0C0C0; }
-        .rank-3 { color: #CD7F32; }
-        .score-cell {
-            font-weight: 600;
-            font-size: 18px;
-        }
-        .date-cell {
-            color: #666;
-            font-size: 14px;
-        }
-        .trophy {
-            margin-left: 5px;
-        }
-        .btn {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 600;
-            margin-top: 20px;
-            transition: background 0.3s;
-        }
-        .btn:hover { background: #5568d3; }
-        .button-group {
-            text-align: center;
-            margin-top: 30px;
-        }
-        
-        /* --- Stats Section --- */
-        .stats-section {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            /* margin-top: 2rem; Removed */
-        }
-        .stats-section h2 {
-            font-size: 1.75rem;
-            margin-bottom: 1.5rem;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 0.5rem;
-        }
-        .stats-grid {
-            display: grid;
-            /* grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); */
-            grid-template-columns: 1fr; /* Changed to single column for sidebar */
-            gap: 2rem;
-        }
-        .stats-col h3 {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
-        }
-        .stat-item {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 0.75rem;
-        }
-        .stat-item-school {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            margin-bottom: 0.25rem;
-        }
-        
-        /* --- THIS IS THE UPDATED STYLE --- */
-        .stat-item-pick {
-            font-size: 0.95rem;
-            padding-left: 40px;
-            color: #667eea;
-            font-weight: 600;
-        }
-        .stat-item-pick strong {
-            color: #333;
-        }
-        
-        .stat-item-just-name {
-            font-weight: 600;
-            font-size: 1.1rem;
-            margin-bottom: 0.25rem;
-            padding-left: 10px;
-        }
-        
-        /* --- THIS IS THE UPDATED STYLE --- */
-        .stat-item-pick-no-logo {
-            font-size: 0.95rem;
-            padding-left: 10px;
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        /* --- NEW CLASS FOR HIRING NAME --- */
-        .stat-item-coach-name {
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: #333;
-            padding-left: 40px; /* Align with percent */
-            margin-bottom: 0.25rem;
-        }
-        .stat-item-coach-name small {
-            color: #555;
-            font-weight: 400;
-        }
-        /* --- END NEW CLASS --- */
-
-
-        /* --- New 2-Column Layout --- */
-        .main-layout {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 2rem;
-            margin-top: 2rem;
-            align-items: flex-start;
-        }
-        .leaderboard-column {
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-        }
-        .stats-column {
-            /* This column will hold the stats section */
-        }
-
-        /* Responsive stacking */
-        @media (max-width: 1024px) {
-            .main-layout {
-                grid-template-columns: 1fr; /* Stack columns */
-            }
-        }
-
-    </style>
+    <!-- Removed inline styles and linked the external stylesheet -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <!-- Added container-xl class for correct width -->
+    <div class="container container-xl">
         
         <!-- Full-width header --><div class="header-section">
             <h1>🏆 Leaderboard</h1>
@@ -456,7 +180,6 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                         <?= displayLogo($pick['school'], 30) ?>
                                         <span><?= htmlspecialchars($pick['school']) ?></span>
                                     </div>
-                                    <!-- UPDATED HTML -->
                                     <div class="stat-item-pick">
                                         (<?= $percent ?>% of picks)
                                     </div>
@@ -483,7 +206,6 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                             <br><small><?= $coachDetails ?></small>
                                         <?php endif; ?>
                                     </div>
-                                    <!-- UPDATED HTML -->
                                     <div class="stat-item-pick-no-logo">
                                         (<?= $percent ?>% of picks)
                                     </div>
@@ -503,8 +225,6 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                         <?= displayLogo($pick['school'], 30) ?>
                                         <span><?= htmlspecialchars($pick['school']) ?></span>
                                     </div>
-
-                                    <!-- UPDATED HTML BLOCK -->
                                     <?php
                                     $coachParts = explode('(', htmlspecialchars($pick['coach_name']), 2);
                                     $coachName = trim($coachParts[0]);
@@ -519,8 +239,6 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                                     <div class="stat-item-pick">
                                         (<?= $percent ?>% of picks)
                                     </div>
-                                    <!-- END UPDATED BLOCK -->
-
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -528,6 +246,8 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
                 </div>
             </div>
 
-        </div> <!-- end .main-layout --></div>
+        </div> <!-- end .main-layout -->
+    </div>
 </body>
 </html>
+

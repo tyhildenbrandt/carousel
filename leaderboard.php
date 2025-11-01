@@ -74,7 +74,7 @@ $totalCoachPicks = $db->query("SELECT COUNT(*) FROM coach_predictions")->fetchCo
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaderboard - Coaching Carousel Game</title>
     <!-- Removed inline styles and linked the external stylesheet -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <!-- Added container-xl class for correct width -->
